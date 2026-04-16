@@ -1,0 +1,8 @@
+﻿dataset/
+site_construction_safety_apd/
+yolo_apd_project/.venv/
+yolo_apd_project/runs/
+yolo_apd_project/__pycache__/
+yolo_apd_project/*.pt
+yolo_apd_project/*.pth
+*.zip
