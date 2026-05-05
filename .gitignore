@@ -5,4 +5,11 @@ yolo_apd_project/runs/
 yolo_apd_project/__pycache__/
 yolo_apd_project/*.pt
 yolo_apd_project/*.pth
+venv/
+env/
+__pycache__/
+*.pyc
+backend_k3/static/uploads/violations/*
+!backend_k3/static/uploads/violations/.gitkeep
+.vscode/
 *.zip
