@@ -1,0 +1,230 @@
+import { useEffect, useState } from 'react'
+import { AlertTriangle, CalendarDays, RefreshCcw, ShieldCheck, Siren, Video } from 'lucide-react'
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
+} from 'recharts'
+import api from '../services/api'
+
+const COLORS = ['#2563eb', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6']
+
+export default function DashboardPage() {
+  const [data, setData] = useState(null)
+
+  useEffect(() => {
+    const fetchDashboard = () => {
+      api.get('/dashboard').then((res) => setData(res.data))
+    }
+
+    fetchDashboard()
+
+    const interval = setInterval(fetchDashboard, 3000)
+
+    return () => clearInterval(interval)
+  }, [])
+
+  if (!data) return <div className="loading-box">Loading dashboard...</div>
+
+  const statCards = [
+    {
+      title: 'Total Violations',
+      value: data.stats.totalViolations.toLocaleString(),
+      note: `${data.stats.totalGrowth} from last week`,
+      colorClass: 'soft-blue',
+      icon: Siren
+    },
+    {
+      title: 'Most Frequent Violation',
+      value: data.stats.mostFrequentViolation,
+      note: `${data.stats.topViolationShare} of total`,
+      colorClass: 'soft-orange',
+      icon: AlertTriangle
+    },
+    {
+      title: 'Monitoring Coverage',
+      value: data.stats.monitoringCoverage,
+      note: `${data.stats.coverageGrowth} from last week`,
+      colorClass: 'soft-green',
+      icon: Video
+    },
+    {
+      title: 'Compliance Rate',
+      value: data.stats.complianceRate,
+      note: `${data.stats.complianceGrowth} from last week`,
+      colorClass: 'soft-purple',
+      icon: ShieldCheck
+    }
+  ]
+
+  return (
+    <div>
+      <div className="page-topbar">
+        <div>
+          <h1 className="page-title">Dashboard Monitoring K3</h1>
+          <p className="page-subtitle">
+            Sistem Monitoring K3 Smart-Factory Berbasis Computer Vision untuk Meningkatkan Standar
+            Keselamatan dan Disiplin Kerja di PT. Indonesia Epson Industry
+          </p>
+        </div>
+        <div className="toolbar-right">
+          <button className="ghost-btn"><CalendarDays size={18} /> May 12 - May 18, 2025</button>
+          <button className="ghost-btn"><RefreshCcw size={18} /> Refresh</button>
+        </div>
+      </div>
+
+      <div className="stats-grid">
+        {statCards.map(({ title, value, note, colorClass, icon: Icon }) => (
+          <div className="panel card" key={title}>
+            <div className="stat-row">
+              <div className={`stat-icon ${colorClass}`}><Icon size={24} /></div>
+              <div>
+                <div className="stat-title">{title}</div>
+                <div className="stat-value">{value}</div>
+                <div className="stat-note">↗ {note}</div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="dashboard-main-grid">
+        <div className="panel card chart-panel wide-panel">
+          <div className="panel-header">
+            <h3>Daily Violations</h3>
+            <button className="mini-btn">This Week</button>
+          </div>
+          <div className="chart-area">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={data.dailyViolations}>
+                <defs>
+                  <linearGradient id="fillBlue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.26} />
+                    <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="#e8eef7" vertical={false} />
+                <XAxis dataKey="date" tickLine={false} axisLine={false} />
+                <YAxis tickLine={false} axisLine={false} />
+                <Tooltip />
+                <Area dataKey="value" stroke="#2563eb" fill="url(#fillBlue)" strokeWidth={3} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="panel card chart-panel donut-panel">
+          <div className="panel-header"><h3>Violation Types Overview</h3></div>
+          <div className="donut-wrap">
+            <div className="donut-chart-box">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={data.violationOverview}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={70}
+                    outerRadius={110}
+                    paddingAngle={2}
+                  >
+                    {data.violationOverview.map((entry, index) => (
+                      <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="donut-center">
+                <div className="center-value">1,248</div>
+                <div className="center-label">Total</div>
+              </div>
+            </div>
+            <div className="legend-list">
+              {data.violationOverview.map((item, index) => (
+                <div className="legend-item" key={item.name}>
+                  <div className="legend-left">
+                    <span className="legend-dot" style={{ background: COLORS[index % COLORS.length] }} />
+                    <span>{item.name}</span>
+                  </div>
+                  <strong>{item.percentage}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="panel card camera-status-panel">
+          <div className="panel-header"><h3>Active Cameras</h3></div>
+          <div className="camera-status-list">
+            {data.activeCameras.slice(0, 5).map((cam) => (
+              <div className="camera-status-item" key={cam.id}>
+                <div className="camera-status-left">
+                  <div className="camera-icon-box"><Video size={18} /></div>
+                  <div>
+                    <div className="camera-code">{cam.id}</div>
+                    <div className="camera-location">{cam.location}</div>
+                  </div>
+                </div>
+                <span className={`status-pill ${cam.status.toLowerCase()}`}>{cam.status}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="panel card reports-panel">
+        <div className="panel-header table-head">
+          <h3>Recent Reports</h3>
+          <button className="link-btn">View All Reports</button>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Area</th>
+                <th>Camera</th>
+                <th>Type</th>
+                <th>Timestamp</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.recentReports.map((report) => (
+                <tr key={report.id}>
+                  <td>{report.id}</td>
+                  <td>{report.area}</td>
+                  <td>{report.cameraId}</td>
+                  <td>
+                    <div className="type-cell">
+                      <span className="legend-dot tiny" style={{ background: report.color }} />
+                      {report.type}
+                    </div>
+                  </td>
+                  <td>{report.timestamp}</td>
+                  <td><span className={`status-pill ${report.reportStatus.toLowerCase().replace(/\s/g, '-')}`}>{report.reportStatus}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="table-footer">
+          <span>Showing 1 to 5 of 20 reports</span>
+          <div className="pagination">
+            <button className="page-btn active">1</button>
+            <button className="page-btn">2</button>
+            <button className="page-btn">3</button>
+            <button className="page-btn">4</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
