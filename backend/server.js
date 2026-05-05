@@ -1,64 +1,60 @@
 import express from 'express'
 import cors from 'cors'
+import dotenv from 'dotenv'
+import multer from 'multer'
+import fs from 'fs'
+import path from 'path'
+import db from './db.js'
+
+dotenv.config()
 
 const app = express()
-const PORT = 5000
+const PORT = Number(process.env.PORT || 5000)
+const UPLOAD_DIR = process.env.UPLOAD_DIR || 'uploads/violations'
+const uploadPath = path.join(process.cwd(), UPLOAD_DIR)
+
+if (!fs.existsSync(uploadPath)) {
+  fs.mkdirSync(uploadPath, { recursive: true })
+}
 
 app.use(cors())
 app.use(express.json())
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')))
 
-const cameras = [
-  { id: 'CAM-01', name: 'Camera 1', location: 'Main Gate', status: 'Active', preview: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=1200&auto=format&fit=crop&q=60' },
-  { id: 'CAM-02', name: 'Camera 2', location: 'Workshop Area', status: 'Active', preview: 'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?w=1200&auto=format&fit=crop&q=60' },
-  { id: 'CAM-03', name: 'Camera 3', location: 'Warehouse', status: 'Active', preview: 'https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=1200&auto=format&fit=crop&q=60' },
-  { id: 'CAM-04', name: 'Camera 4', location: 'Parking Area', status: 'Inactive', preview: 'https://images.unsplash.com/photo-1489515217757-5fd1be406fef?w=1200&auto=format&fit=crop&q=60' },
-  { id: 'CAM-05', name: 'Camera 5', location: 'Loading Bay', status: 'Warning', preview: 'https://images.unsplash.com/photo-1567789884554-0b844b597180?w=1200&auto=format&fit=crop&q=60' },
-  { id: 'CAM-06', name: 'Camera 6', location: 'Assembly Line', status: 'Active', preview: 'https://images.unsplash.com/photo-1517048676732-d65bc937f952?w=1200&auto=format&fit=crop&q=60' }
-]
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadPath),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname || '.jpg') || '.jpg'
+    cb(null, `violation_${Date.now()}${ext}`)
+  }
+})
 
-const reports = [
-  { id: 'RPT-2025-0518-1248', area: 'Main Gate', cameraId: 'CAM-01', type: 'No Helmet', timestamp: 'May 18, 2025 10:24 AM', reportStatus: 'New', color: '#2563eb', image: 'https://images.unsplash.com/photo-1581093450021-4a7360e9a6b5?w=1000&auto=format&fit=crop&q=60' },
-  { id: 'RPT-2025-0518-1247', area: 'Workshop Area', cameraId: 'CAM-02', type: 'Triple Riding', timestamp: 'May 18, 2025 10:15 AM', reportStatus: 'In Review', color: '#ef4444', image: 'https://images.unsplash.com/photo-1517048676732-d65bc937f952?w=1000&auto=format&fit=crop&q=60' },
-  { id: 'RPT-2025-0518-1246', area: 'Warehouse', cameraId: 'CAM-03', type: 'No License', timestamp: 'May 18, 2025 10:07 AM', reportStatus: 'Resolved', color: '#f59e0b', image: 'https://images.unsplash.com/photo-1581092580497-e0d23cbdf1dc?w=1000&auto=format&fit=crop&q=60' },
-  { id: 'RPT-2025-0518-1245', area: 'Parking Area', cameraId: 'CAM-04', type: 'Red Light Jump', timestamp: 'May 18, 2025 09:58 AM', reportStatus: 'New', color: '#10b981', image: 'https://images.unsplash.com/photo-1489515217757-5fd1be406fef?w=1000&auto=format&fit=crop&q=60' },
-  { id: 'RPT-2025-0518-1244', area: 'Loading Bay', cameraId: 'CAM-05', type: 'No Helmet', timestamp: 'May 18, 2025 09:42 AM', reportStatus: 'In Review', color: '#2563eb', image: 'https://images.unsplash.com/photo-1567789884554-0b844b597180?w=1000&auto=format&fit=crop&q=60' }
-]
+const upload = multer({ storage })
 
-const dashboardData = {
-  stats: {
-    totalViolations: 1248,
-    totalGrowth: '12.5%',
-    mostFrequentViolation: 'No Helmet',
-    topViolationShare: '35.4%',
-    monitoringCoverage: '92.6%',
-    coverageGrowth: '3.2%',
-    complianceRate: '86.7%',
-    complianceGrowth: '4.8%'
-  },
-  dailyViolations: [
-    { date: 'May 12', value: 120 },
-    { date: 'May 13', value: 182 },
-    { date: 'May 14', value: 210 },
-    { date: 'May 15', value: 298 },
-    { date: 'May 16', value: 245 },
-    { date: 'May 17', value: 310 },
-    { date: 'May 18', value: 283 }
-  ],
-  violationOverview: [
-    { name: 'No Helmet', value: 35.4, percentage: '35.4%' },
-    { name: 'Triple Riding', value: 24.7, percentage: '24.7%' },
-    { name: 'No License', value: 17.8, percentage: '17.8%' },
-    { name: 'Red Light Jump', value: 12.1, percentage: '12.1%' },
-    { name: 'Others', value: 10.0, percentage: '10.0%' }
-  ],
-  activeCameras: cameras,
-  recentReports: reports
+const CAMERA_PREVIEW_FALLBACK = 'https://placehold.co/1200x700/eaf2ff/2563eb?text=Camera+Preview'
+const EVIDENCE_FALLBACK = 'https://placehold.co/1000x600/eaf2ff/2563eb?text=Violation+Evidence'
+
+function boolFromValue(value) {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value === 1
+  if (!value) return false
+  return String(value).toLowerCase() === 'true' || String(value) === '1'
+}
+
+function getColorByType(type = '') {
+  const lower = type.toLowerCase()
+  if (lower.includes('helmet')) return '#2563eb'
+  if (lower.includes('vest')) return '#ef4444'
+  if (lower.includes('shoes')) return '#f59e0b'
+  if (lower.includes('gloves')) return '#10b981'
+  if (lower.includes('all ppe') || lower.includes('multiple')) return '#8b5cf6'
+  return '#64748b'
 }
 
 function normalizeViolationType(type = '') {
   const lower = type.toLowerCase()
 
-  if (lower.includes('all ppe')) return 'Multiple PPE'
+  if (lower.includes('all ppe') || lower.includes('multiple')) return 'Multiple PPE'
   if (lower.includes('helmet')) return 'No Helmet'
   if (lower.includes('vest')) return 'No Vest'
   if (lower.includes('shoes')) return 'No Safety Shoes'
@@ -67,105 +63,382 @@ function normalizeViolationType(type = '') {
   return 'Others'
 }
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok' }))
-app.get('/api/dashboard', (req, res) => {
-  const totalViolations = reports.length
+function createViolationTypeFromBooleans({ missingHelmet, missingVest, missingShoes, missingGloves }) {
+  const missing = []
 
-  const categoryCounts = {
-    'No Helmet': 0,
-    'No Vest': 0,
-    'No Safety Shoes': 0,
-    'No Gloves': 0,
-    'Multiple PPE': 0
+  if (missingHelmet) missing.push('helmet')
+  if (missingVest) missing.push('vest')
+  if (missingShoes) missing.push('shoes')
+  if (missingGloves) missing.push('gloves')
+
+  if (missing.length === 0) return 'No Violation'
+  if (missing.length === 4) return 'Missing All PPE'
+
+  return `Missing ${missing.join(', ')}`
+}
+
+function formatMysqlDate(date = new Date()) {
+  return new Date(date).toISOString().slice(0, 19).replace('T', ' ')
+}
+
+function mapReportRow(row) {
+  return {
+    id: row.id,
+    area: row.area,
+    cameraId: row.cameraId,
+    type: row.type,
+    timestamp: row.timestamp,
+    reportStatus: row.reportStatus,
+    image: row.image,
+    color: row.color || getColorByType(row.type),
+    missingHelmet: Boolean(row.missingHelmet),
+    missingVest: Boolean(row.missingVest),
+    missingShoes: Boolean(row.missingShoes),
+    missingGloves: Boolean(row.missingGloves)
   }
+}
 
-  reports.forEach((report) => {
-    const category = normalizeViolationType(report.type)
+async function ensureCameraExists(cameraId, area) {
+  const [rows] = await db.query('SELECT id FROM cameras WHERE id = ?', [cameraId])
 
-    if (categoryCounts[category] !== undefined) {
-      categoryCounts[category] += 1
-    }
-  })
+  if (rows.length > 0) return
 
-  const violationOverview = Object.entries(categoryCounts).map(([name, count]) => {
-    const percentage =
-      totalViolations > 0 ? ((count / totalViolations) * 100).toFixed(1) : '0.0'
+  await db.query(
+    `
+    INSERT INTO cameras (id, name, location, status, preview)
+    VALUES (?, ?, ?, 'Active', ?)
+    `,
+    [cameraId, cameraId, area || 'Unknown Area', CAMERA_PREVIEW_FALLBACK]
+  )
+}
 
-    return {
-      name,
-      value: count,
-      percentage: `${percentage}%`
-    }
-  })
+async function getReports() {
+  const [rows] = await db.query(`
+    SELECT
+      id,
+      area,
+      camera_id AS cameraId,
+      type,
+      DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s') AS timestamp,
+      report_status AS reportStatus,
+      image,
+      color,
+      missing_helmet AS missingHelmet,
+      missing_vest AS missingVest,
+      missing_shoes AS missingShoes,
+      missing_gloves AS missingGloves
+    FROM reports
+    ORDER BY created_at DESC
+  `)
 
-  const mostFrequent = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1])[0]
+  return rows.map(mapReportRow)
+}
 
-  const dynamicDashboard = {
-    stats: {
-      totalViolations,
-      totalGrowth: 'Realtime',
-      mostFrequentViolation: mostFrequent ? mostFrequent[0] : '-',
-      topViolationShare:
-        totalViolations > 0
-          ? `${((mostFrequent[1] / totalViolations) * 100).toFixed(1)}%`
-          : '0%',
-      monitoringCoverage: '100%',
-      coverageGrowth: 'Live',
-      complianceRate: totalViolations > 0 ? 'Need Review' : '100%',
-      complianceGrowth: 'Realtime'
-    },
-
-    dailyViolations: [
-      { date: 'Today', value: totalViolations }
-    ],
-
-    violationOverview,
-
-    activeCameras: cameras,
-
-    recentReports: reports.slice(0, 5)
-  }
-
-  res.json(dynamicDashboard)
-})
-app.get('/api/cameras', (req, res) => res.json(cameras))
-app.get('/api/cameras/:id', (req, res) => {
-  const item = cameras.find((cam) => cam.id === req.params.id)
-  if (!item) return res.status(404).json({ message: 'Camera not found' })
-  res.json(item)
-})
-app.get('/api/reports', (req, res) => res.json(reports))
-app.post('/api/reports', (req, res) => {
-  const { area, cameraId, type, timestamp, reportStatus, image } = req.body
-
-  const newReport = {
+async function insertReport({
+  area,
+  cameraId,
+  type,
+  timestamp,
+  reportStatus,
+  image,
+  missingHelmet,
+  missingVest,
+  missingShoes,
+  missingGloves
+}) {
+  const report = {
     id: `RPT-${Date.now()}`,
     area: area || 'Unknown Area',
-    cameraId: cameraId || 'Unknown Camera',
+    cameraId: cameraId || 'CAM-LAPTOP',
     type: type || 'Unknown Violation',
-    timestamp: timestamp || new Date().toLocaleString(),
+    timestamp: timestamp || formatMysqlDate(),
     reportStatus: reportStatus || 'New',
-    color: '#ef4444',
-    image:
-      image ||
-      'https://placehold.co/1000x600/eaf2ff/2563eb?text=Violation+Evidence'
+    image: image || EVIDENCE_FALLBACK,
+    color: getColorByType(type),
+    missingHelmet: Boolean(missingHelmet),
+    missingVest: Boolean(missingVest),
+    missingShoes: Boolean(missingShoes),
+    missingGloves: Boolean(missingGloves)
   }
 
-  reports.unshift(newReport)
+  await ensureCameraExists(report.cameraId, report.area)
 
-  res.status(201).json({
-    message: 'Report berhasil ditambahkan',
-    data: newReport
-  })
-})
-app.get('/api/reports/:id', (req, res) => {
-  const item = reports.find((report) => report.id === req.params.id)
-  if (!item) return res.status(404).json({ message: 'Report not found' })
-  res.json(item)
-})
+  await db.query(
+    `
+    INSERT INTO reports
+    (id, area, camera_id, type, timestamp, report_status, image, color,
+     missing_helmet, missing_vest, missing_shoes, missing_gloves)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    [
+      report.id,
+      report.area,
+      report.cameraId,
+      report.type,
+      report.timestamp,
+      report.reportStatus,
+      report.image,
+      report.color,
+      report.missingHelmet,
+      report.missingVest,
+      report.missingShoes,
+      report.missingGloves
+    ]
+  )
+
+  return report
+}
 
 app.get('/', (req, res) => {
-  res.send('Smart K3 Vision Backend is running')
+  res.send('Smart K3 Vision Backend with MySQL is running')
+})
+
+app.get('/api/health', async (req, res) => {
+  try {
+    await db.query('SELECT 1')
+    res.json({ status: 'ok', database: 'connected' })
+  } catch (error) {
+    res.status(500).json({ status: 'error', database: 'disconnected', message: error.message })
+  }
+})
+
+app.get('/api/cameras', async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT
+        id,
+        name,
+        location,
+        status,
+        rtsp_url AS rtspUrl,
+        COALESCE(preview, ?) AS preview
+      FROM cameras
+      ORDER BY id ASC
+    `, [CAMERA_PREVIEW_FALLBACK])
+
+    res.json(rows)
+  } catch (error) {
+    console.error('Gagal mengambil cameras:', error)
+    res.status(500).json({ message: 'Gagal mengambil data cameras' })
+  }
+})
+
+app.get('/api/cameras/:id', async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT
+        id,
+        name,
+        location,
+        status,
+        rtsp_url AS rtspUrl,
+        COALESCE(preview, ?) AS preview
+      FROM cameras
+      WHERE id = ?
+    `, [CAMERA_PREVIEW_FALLBACK, req.params.id])
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Camera not found' })
+    }
+
+    res.json(rows[0])
+  } catch (error) {
+    console.error('Gagal mengambil detail camera:', error)
+    res.status(500).json({ message: 'Gagal mengambil detail camera' })
+  }
+})
+
+app.get('/api/reports', async (req, res) => {
+  try {
+    const reports = await getReports()
+    res.json(reports)
+  } catch (error) {
+    console.error('Gagal mengambil reports:', error)
+    res.status(500).json({ message: 'Gagal mengambil data reports' })
+  }
+})
+
+app.get('/api/reports/:id', async (req, res) => {
+  try {
+    const [rows] = await db.query(`
+      SELECT
+        id,
+        area,
+        camera_id AS cameraId,
+        type,
+        DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s') AS timestamp,
+        report_status AS reportStatus,
+        image,
+        color,
+        missing_helmet AS missingHelmet,
+        missing_vest AS missingVest,
+        missing_shoes AS missingShoes,
+        missing_gloves AS missingGloves
+      FROM reports
+      WHERE id = ?
+    `, [req.params.id])
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Report not found' })
+    }
+
+    res.json(mapReportRow(rows[0]))
+  } catch (error) {
+    console.error('Gagal mengambil detail report:', error)
+    res.status(500).json({ message: 'Gagal mengambil detail report' })
+  }
+})
+
+app.post('/api/reports', async (req, res) => {
+  try {
+    const { area, cameraId, type, timestamp, reportStatus, image } = req.body
+    const lowerType = String(type || '').toLowerCase()
+
+    const newReport = await insertReport({
+      area,
+      cameraId,
+      type,
+      timestamp,
+      reportStatus,
+      image,
+      missingHelmet: lowerType.includes('helmet') || lowerType.includes('all ppe'),
+      missingVest: lowerType.includes('vest') || lowerType.includes('all ppe'),
+      missingShoes: lowerType.includes('shoes') || lowerType.includes('all ppe'),
+      missingGloves: lowerType.includes('gloves') || lowerType.includes('all ppe')
+    })
+
+    res.status(201).json({
+      message: 'Report berhasil ditambahkan',
+      data: newReport
+    })
+  } catch (error) {
+    console.error('Gagal menyimpan report:', error)
+    res.status(500).json({ message: 'Gagal menyimpan report' })
+  }
+})
+
+app.post('/api/violations/ingest', upload.single('image'), async (req, res) => {
+  try {
+    const cameraId = req.body.camera_id || req.body.cameraId || 'CAM-LAPTOP'
+    const area = req.body.area || 'Webcam Test Area'
+
+    const missingHelmet = boolFromValue(req.body.missing_helmet)
+    const missingVest = boolFromValue(req.body.missing_vest)
+    const missingShoes = boolFromValue(req.body.missing_shoes)
+    const missingGloves = boolFromValue(req.body.missing_gloves)
+
+    const type =
+      req.body.type ||
+      createViolationTypeFromBooleans({ missingHelmet, missingVest, missingShoes, missingGloves })
+
+    const image = req.file
+      ? `http://localhost:${PORT}/uploads/violations/${req.file.filename}`
+      : EVIDENCE_FALLBACK
+
+    const newReport = await insertReport({
+      area,
+      cameraId,
+      type,
+      timestamp: formatMysqlDate(),
+      reportStatus: 'New',
+      image,
+      missingHelmet,
+      missingVest,
+      missingShoes,
+      missingGloves
+    })
+
+    res.status(201).json({
+      status: 'success',
+      message: 'Pelanggaran berhasil dicatat',
+      data: newReport
+    })
+  } catch (error) {
+    console.error('Gagal ingest violation:', error)
+    res.status(500).json({ status: 'error', message: 'Internal server error' })
+  }
+})
+
+app.get('/api/dashboard', async (req, res) => {
+  try {
+    const reportRows = await getReports()
+    const totalViolations = reportRows.length
+
+    const categoryCounts = {
+      'No Helmet': 0,
+      'No Vest': 0,
+      'No Safety Shoes': 0,
+      'No Gloves': 0,
+      'Multiple PPE': 0
+    }
+
+    reportRows.forEach((report) => {
+      const category = normalizeViolationType(report.type)
+
+      if (categoryCounts[category] !== undefined) {
+        categoryCounts[category] += 1
+      }
+    })
+
+    const violationOverview = Object.entries(categoryCounts).map(([name, count]) => {
+      const percentage =
+        totalViolations > 0 ? ((count / totalViolations) * 100).toFixed(1) : '0.0'
+
+      return {
+        name,
+        value: count,
+        percentage: `${percentage}%`
+      }
+    })
+
+    const mostFrequent = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1])[0]
+
+    const [cameraRows] = await db.query(`
+      SELECT
+        id,
+        name,
+        location,
+        status,
+        rtsp_url AS rtspUrl,
+        COALESCE(preview, ?) AS preview
+      FROM cameras
+      ORDER BY id ASC
+    `, [CAMERA_PREVIEW_FALLBACK])
+
+    const activeCount = cameraRows.filter((cam) => cam.status === 'Active').length
+    const totalCameras = cameraRows.length
+    const monitoringCoverage =
+      totalCameras > 0 ? `${Math.round((activeCount / totalCameras) * 100)}%` : '0%'
+
+    const dynamicDashboard = {
+      stats: {
+        totalViolations,
+        totalGrowth: 'Realtime',
+        mostFrequentViolation: mostFrequent ? mostFrequent[0] : '-',
+        topViolationShare:
+          totalViolations > 0 && mostFrequent
+            ? `${((mostFrequent[1] / totalViolations) * 100).toFixed(1)}%`
+            : '0%',
+        monitoringCoverage,
+        coverageGrowth: 'Live',
+        complianceRate: totalViolations > 0 ? 'Need Review' : '100%',
+        complianceGrowth: 'Realtime'
+      },
+
+      dailyViolations: [
+        { date: 'Today', value: totalViolations }
+      ],
+
+      violationOverview,
+      activeCameras: cameraRows,
+      recentReports: reportRows
+    }
+
+    res.json(dynamicDashboard)
+  } catch (error) {
+    console.error('Gagal mengambil dashboard:', error)
+    res.status(500).json({ message: 'Gagal mengambil data dashboard' })
+  }
 })
 
 app.listen(PORT, () => {

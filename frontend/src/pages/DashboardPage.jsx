@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { AlertTriangle, CalendarDays, RefreshCcw, ShieldCheck, Siren, Video } from 'lucide-react'
 import {
   Area,
@@ -18,12 +19,30 @@ const COLORS = ['#2563eb', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6']
 
 export default function DashboardPage() {
   const [data, setData] = useState(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const reportsPerPage = 5
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page)
+
+    const section = document.getElementById('recent-reports')
+    if (section) {
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }
+  const today = new Date()
+
+  const formattedDate = today.toLocaleDateString('id-ID', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric'
+  })
+
+  const fetchDashboard = () => {
+    api.get('/dashboard').then((res) => setData(res.data))
+  }
 
   useEffect(() => {
-    const fetchDashboard = () => {
-      api.get('/dashboard').then((res) => setData(res.data))
-    }
-
     fetchDashboard()
 
     const interval = setInterval(fetchDashboard, 3000)
@@ -33,6 +52,13 @@ export default function DashboardPage() {
 
   if (!data) return <div className="loading-box">Loading dashboard...</div>
 
+  const totalReports = data.recentReports.length
+  const totalPages = Math.ceil(totalReports / reportsPerPage)
+
+  const startIndex = (currentPage - 1) * reportsPerPage
+  const endIndex = startIndex + reportsPerPage
+
+  const paginatedReports = data.recentReports.slice(startIndex, endIndex)
   const statCards = [
     {
       title: 'Total Violations',
@@ -75,8 +101,13 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="toolbar-right">
-          <button className="ghost-btn"><CalendarDays size={18} /> May 12 - May 18, 2025</button>
-          <button className="ghost-btn"><RefreshCcw size={18} /> Refresh</button>
+          <button className="ghost-btn">
+            <CalendarDays size={18} /> {formattedDate}
+          </button>
+
+          <button className="ghost-btn" onClick={fetchDashboard}>
+            <RefreshCcw size={18} /> Refresh
+          </button>
         </div>
       </div>
 
@@ -164,25 +195,36 @@ export default function DashboardPage() {
           <div className="panel-header"><h3>Active Cameras</h3></div>
           <div className="camera-status-list">
             {data.activeCameras.slice(0, 5).map((cam) => (
-              <div className="camera-status-item" key={cam.id}>
+              <Link
+                to={`/live-camera/${cam.id}`}
+                className="camera-status-item"
+                key={cam.id}
+              >
                 <div className="camera-status-left">
-                  <div className="camera-icon-box"><Video size={18} /></div>
+                  <div className="camera-icon-box">
+                    <Video size={18} />
+                  </div>
                   <div>
                     <div className="camera-code">{cam.id}</div>
                     <div className="camera-location">{cam.location}</div>
                   </div>
                 </div>
-                <span className={`status-pill ${cam.status.toLowerCase()}`}>{cam.status}</span>
-              </div>
+
+                <span className={`status-pill ${cam.status.toLowerCase()}`}>
+                  {cam.status}
+                </span>
+              </Link>
             ))}
           </div>
         </div>
       </div>
 
-      <div className="panel card reports-panel">
+      <div id="recent-reports" className="panel card reports-panel">
         <div className="panel-header table-head">
           <h3>Recent Reports</h3>
-          <button className="link-btn">View All Reports</button>
+          <Link className="link-btn" to="/reports">
+            View All Reports
+          </Link>
         </div>
         <div className="table-wrap">
           <table>
@@ -197,7 +239,7 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {data.recentReports.map((report) => (
+              {paginatedReports.map((report) => (
                 <tr key={report.id}>
                   <td>{report.id}</td>
                   <td>{report.area}</td>
@@ -216,12 +258,23 @@ export default function DashboardPage() {
           </table>
         </div>
         <div className="table-footer">
-          <span>Showing 1 to 5 of 20 reports</span>
+          <span>
+            Showing {totalReports === 0 ? 0 : startIndex + 1} to {Math.min(endIndex, totalReports)} of {totalReports} reports
+          </span>
           <div className="pagination">
-            <button className="page-btn active">1</button>
-            <button className="page-btn">2</button>
-            <button className="page-btn">3</button>
-            <button className="page-btn">4</button>
+            {Array.from({ length: totalPages }, (_, index) => {
+              const page = index + 1
+
+              return (
+                <button
+                  key={page}
+                  className={`page-btn ${currentPage === page ? 'active' : ''}`}
+                  onClick={() => handlePageChange(page)}
+                >
+                  {page}
+                </button>
+              )
+            })}
           </div>
         </div>
       </div>

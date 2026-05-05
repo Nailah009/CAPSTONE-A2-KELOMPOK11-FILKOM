@@ -699,4 +699,59 @@ th {
   .donut-wrap {
     grid-template-columns: 1fr;
   }
+
+    /* ===== CLICKABLE ELEMENTS ===== */
+  .camera-status-item {
+    cursor: pointer;
+    transition: 0.2s ease;
+  }
+
+  .camera-status-item:hover {
+    background: #f8fbff;
+    transform: translateY(-1px);
+  }
+
+  .link-btn {
+    cursor: pointer;
+  }
+}
+
+/* ===== FIX RECENT REPORTS PAGINATION LAYOUT ===== */
+
+.reports-panel {
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+}
+
+.table-wrap {
+  flex: 1;
+}
+
+.table-footer {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.table-wrap tbody tr {
+  height: 56px;
+}
+
+.table-wrap td {
+  vertical-align: middle;
+}
+
+/* Fix tinggi baris tabel Recent Reports */
+.table-wrap tbody tr {
+  height: 56px;
+}
+
+.table-wrap td {
+  vertical-align: middle;
+}
+
+.type-cell {
+  white-space: nowrap;
 }
