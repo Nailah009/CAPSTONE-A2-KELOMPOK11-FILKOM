@@ -3,4 +3,4 @@ Model YOLOv8 APD 3-Class
 File model best.pt disimpan di Google Drive.
 
 Link model:
-ISI_LINK_GOOGLE_DRIVE_BEST_PT_DI_SINI
+https://drive.google.com/drive/folders/1Qy7-mQRZlDikJL5IlbsUpiCvkkIIPkoA?usp=sharing
