@@ -1,0 +1,8 @@
+train: /content/site_construction_safety_3class/train/images
+val: /content/site_construction_safety_3class/valid/images
+test: /content/site_construction_safety_3class/test/images
+nc: 3
+names:
+- person
+- helmet
+- vest
