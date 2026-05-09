@@ -84,9 +84,7 @@ Model mendeteksi class berikut:
 ```text
 person
 helmet
-vest
-shoes
-gloves
+vesT
 ```
 
 Jika APD tidak lengkap, sistem akan mengirimkan report seperti:
@@ -95,8 +93,6 @@ Jika APD tidak lengkap, sistem akan mengirimkan report seperti:
 Missing All PPE
 Missing helmet
 Missing vest
-Missing shoes
-Missing gloves
 ```
 
 ---
