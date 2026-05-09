@@ -1,9 +1,0 @@
-*.zip
-*.pt
-runs/
-dataset/
-raw_dataset/
-site_construction_safety/
-site_construction_safety_3class/
-__pycache__/
-.ipynb_checkpoints/
