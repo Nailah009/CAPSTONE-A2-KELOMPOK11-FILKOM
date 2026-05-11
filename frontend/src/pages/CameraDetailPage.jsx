@@ -40,7 +40,7 @@ export default function CameraDetailPage() {
       <div className="sk3-camera-grid">
         <section className="sk3-video-card">
           <img
-            src="http://localhost:8000/video-feed"
+            src="http://localhost:5055/video-feed"
             alt="Live Detection Stream"
             className="sk3-live-stream"
           />

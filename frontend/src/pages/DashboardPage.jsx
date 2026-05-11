@@ -23,8 +23,17 @@ export default function DashboardPage() {
   const reportsPerPage = 5
   const dateInputRef = useRef(null)
 
+  const getTodayLocalDate = () => {
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const day = String(now.getDate()).padStart(2, '0')
+
+    return `${year}-${month}-${day}`
+  }
+
   const [selectedDate, setSelectedDate] = useState(() => {
-    return new Date().toISOString().split('T')[0]
+    return getTodayLocalDate()
   })
 
   const formattedDate = new Date(selectedDate).toLocaleDateString('id-ID', {
@@ -273,7 +282,7 @@ export default function DashboardPage() {
                 <th>Camera</th>
                 <th>Type</th>
                 <th>Timestamp</th>
-                <th>Status</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -289,7 +298,11 @@ export default function DashboardPage() {
                     </div>
                   </td>
                   <td>{report.timestamp}</td>
-                  <td><span className={`status-pill ${report.reportStatus.toLowerCase().replace(/\s/g, '-')}`}>{report.reportStatus}</span></td>
+                  <td>
+                    <Link className="link-btn left-link" to={`/reports/${report.id}`}>
+                      Lihat Detail
+                    </Link>
+                  </td>
                 </tr>
               ))}
             </tbody>

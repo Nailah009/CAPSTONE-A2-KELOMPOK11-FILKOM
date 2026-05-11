@@ -18,7 +18,12 @@ export default function ReportsPage() {
   }, [])
 
   const areas = ['All', ...new Set(reports.map((item) => item.area))]
-  const types = ['All', ...new Set(reports.map((item) => item.type))]
+  const types = [
+    'All',
+    'Missing All PPE',
+    'Missing helmet',
+    'Missing vest'
+  ]
 
   const filteredReports = useMemo(() => {
     return reports.filter((item) => {
@@ -49,14 +54,13 @@ export default function ReportsPage() {
 
     autoTable(doc, {
       startY: 30,
-      head: [['ID', 'Area', 'Camera', 'Type', 'Timestamp', 'Status']],
+      head: [['ID', 'Area', 'Camera', 'Type', 'Timestamp']],
       body: filteredReports.map((report) => [
         report.id,
         report.area,
         report.cameraId,
         report.type,
-        report.timestamp,
-        report.reportStatus
+        report.timestamp
       ])
     })
 
@@ -96,35 +100,33 @@ export default function ReportsPage() {
                 <th>Camera</th>
                 <th>Type</th>
                 <th>Timestamp</th>
-                <th>Status</th>
                 <th>Action</th>
               </tr>
             </thead>
 
             <tbody>
-              {paginatedReports.map((report) => (
-                <tr key={report.id}>
-                  <td>{report.id}</td>
-                  <td>{report.area}</td>
-                  <td>{report.cameraId}</td>
-                  <td>{report.type}</td>
-                  <td>{report.timestamp}</td>
-                  <td>
-                    <span
-                      className={`status-pill ${report.reportStatus
-                        .toLowerCase()
-                        .replace(/\s/g, '-')}`}
-                    >
-                      {report.reportStatus}
-                    </span>
-                  </td>
-                  <td>
-                    <Link className="link-btn left-link" to={`/reports/${report.id}`}>
-                      Lihat Detail
-                    </Link>
+              {paginatedReports.length > 0 ? (
+                paginatedReports.map((report) => (
+                  <tr key={report.id}>
+                    <td>{report.id}</td>
+                    <td>{report.area}</td>
+                    <td>{report.cameraId}</td>
+                    <td>{report.type}</td>
+                    <td>{report.timestamp}</td>
+                    <td>
+                      <Link className="link-btn left-link" to={`/reports/${report.id}`}>
+                        Lihat Detail
+                      </Link>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="6" className="empty-table-text">
+                    Tidak ada laporan untuk filter ini.
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>

@@ -1,31 +1,54 @@
-import { AlertTriangle, Camera, LayoutDashboard, Settings, Shield, FileText } from 'lucide-react'
-import { NavLink, Outlet } from 'react-router-dom'
+import {AlertTriangle, Camera, LayoutDashboard, Settings, Shield, FileText, LogOut} from 'lucide-react'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { getCurrentUser, logout } from '../utils/auth'
 
 const menus = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/live-camera', label: 'Live Camera', icon: Camera },
   { to: '/reports', label: 'Reports', icon: FileText },
-  { to: '/dashboard', label: 'Analytics', icon: AlertTriangle },
-  { to: '/dashboard', label: 'Settings', icon: Settings }
+  { to: '/analytics', label: 'Analytics', icon: AlertTriangle },
+  { to: '/settings', label: 'Settings', icon: Settings }
 ]
 
 export default function Layout() {
+  const navigate = useNavigate()
+  const user = getCurrentUser()
+
+  const roleLabel =
+    user?.role === 'general_manager'
+      ? 'General Manager'
+      : user?.role === 'supervisor'
+        ? 'Supervisor'
+        : 'User'
+
+  const allowedMenus =
+    user?.role === 'general_manager'
+      ? menus.filter((item) => ['Dashboard', 'Reports'].includes(item.label))
+      : menus
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div>
           <div className="brand-wrap">
-            <div className="brand-icon"><Shield size={22} /></div>
+            <div className="brand-icon">
+              <Shield size={22} />
+            </div>
             <div className="brand-name">Smart K3 Vision</div>
           </div>
 
           <nav className="nav-list">
-            {menus.map(({ to, label, icon: Icon }, index) => (
+            {allowedMenus.map(({ to, label, icon: Icon }, index) => (
               <NavLink
                 key={`${label}-${index}`}
                 to={to}
                 className={({ isActive }) =>
-                  `nav-item ${isActive && (label === 'Dashboard' || label === 'Reports' || label === 'Live Camera') ? 'active' : ''}`
+                  `nav-item ${isActive ? 'active' : ''}`
                 }
               >
                 <Icon size={20} />
@@ -35,19 +58,27 @@ export default function Layout() {
           </nav>
         </div>
 
-        <div className="profile-card">
-          <img
-            className="avatar"
-            src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=60"
-            alt="Supervisor"
-          />
-          <div>
-            <div className="profile-name">Wahyu Hidayat</div>
-            <div className="profile-role">Supervisor</div>
+        <div className="user-card">
+          <div className="user-avatar">
+            {(user?.name || 'U').charAt(0)}
           </div>
-          <div className="online-dot" />
+
+          <div className="user-info">
+            <strong>{user?.name || 'Guest User'}</strong>
+            <span>{roleLabel}</span>
+          </div>
+
+          <button
+            type="button"
+            className="logout-icon-btn"
+            onClick={handleLogout}
+            title="Logout"
+          >
+            <LogOut size={17} />
+          </button>
         </div>
       </aside>
+
       <main className="page-content">
         <Outlet />
       </main>

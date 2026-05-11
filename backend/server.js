@@ -125,14 +125,12 @@ async function getReports(date = null) {
       area,
       camera_id AS cameraId,
       type,
-      DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s') AS timestamp,
-      report_status AS reportStatus,
-      image,
-      color,
-      missing_helmet AS missingHelmet,
-      missing_vest AS missingVest
+      missing_items AS missingItems,
+      image_path AS imagePath,
+      DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s') AS timestamp
     FROM reports
   `
+
   const params = []
 
   if (date) {
@@ -140,34 +138,47 @@ async function getReports(date = null) {
     params.push(date)
   }
 
-  query += ` ORDER BY created_at DESC `
+  query += ` ORDER BY timestamp DESC `
 
   const [rows] = await db.query(query, params)
 
-  return rows.map(mapReportRow)
+  return rows.map((row) => ({
+    id: row.id,
+    area: row.area,
+    cameraId: row.cameraId,
+    type: row.type,
+    missingItems: row.missingItems,
+    imagePath: row.imagePath,
+    image: row.imagePath,
+    timestamp: row.timestamp,
+    reportStatus: 'New',
+    color:
+      row.type === 'Missing All PPE'
+        ? '#8b5cf6'
+        : row.type === 'Missing helmet'
+          ? '#2563eb'
+          : row.type === 'Missing vest'
+            ? '#ef4444'
+            : '#64748b'
+  }))
 }
 
 async function insertReport({
   area,
   cameraId,
   type,
-  timestamp,
-  reportStatus,
-  image,
-  missingHelmet,
-  missingVest
+  missingItems,
+  imagePath,
+  timestamp
 }) {
   const report = {
     id: `RPT-${Date.now()}`,
     area: area || 'Unknown Area',
     cameraId: cameraId || 'CAM-LAPTOP',
     type: type || 'Unknown Violation',
-    timestamp: timestamp || formatMysqlDate(),
-    reportStatus: reportStatus || 'New',
-    image: image || EVIDENCE_FALLBACK,
-    color: getColorByType(type),
-    missingHelmet: Boolean(missingHelmet),
-    missingVest: Boolean(missingVest)
+    missingItems: missingItems || '-',
+    imagePath: imagePath || '',
+    timestamp: timestamp || formatMysqlDate()
   }
 
   await ensureCameraExists(report.cameraId, report.area)
@@ -175,25 +186,31 @@ async function insertReport({
   await db.query(
     `
     INSERT INTO reports
-    (id, area, camera_id, type, timestamp, report_status, image, color,
-     missing_helmet, missing_vest)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (id, area, camera_id, type, missing_items, image_path, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     `,
     [
       report.id,
       report.area,
       report.cameraId,
       report.type,
-      report.timestamp,
-      report.reportStatus,
-      report.image,
-      report.color,
-      report.missingHelmet,
-      report.missingVest
+      report.missingItems,
+      report.imagePath,
+      report.timestamp
     ]
   )
 
-  return report
+  return {
+    id: report.id,
+    area: report.area,
+    cameraId: report.cameraId,
+    type: report.type,
+    missingItems: report.missingItems,
+    imagePath: report.imagePath,
+    image: report.imagePath,
+    timestamp: report.timestamp,
+    reportStatus: 'New'
+  }
 }
 
 app.get('/', (req, res) => {
@@ -206,6 +223,57 @@ app.get('/api/health', async (req, res) => {
     res.json({ status: 'ok', database: 'connected' })
   } catch (error) {
     res.status(500).json({ status: 'error', database: 'disconnected', message: error.message })
+  }
+})
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body
+
+    if (!username || !password) {
+      return res.status(400).json({
+        message: 'Username dan password wajib diisi'
+      })
+    }
+
+    const [rows] = await db.query(
+      `
+      SELECT id, name, username, role, status
+      FROM users
+      WHERE username = ? AND password = ?
+      LIMIT 1
+      `,
+      [username, password]
+    )
+
+    if (rows.length === 0) {
+      return res.status(401).json({
+        message: 'Username atau password salah'
+      })
+    }
+
+    const user = rows[0]
+
+    if (user.status !== 'active') {
+      return res.status(403).json({
+        message: 'Akun tidak aktif. Silakan hubungi admin.'
+      })
+    }
+
+    res.json({
+      message: 'Login berhasil',
+      user: {
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        role: user.role
+      }
+    })
+  } catch (error) {
+    console.error('Gagal login:', error)
+    res.status(500).json({
+      message: 'Terjadi kesalahan saat login'
+    })
   }
 })
 
@@ -267,27 +335,40 @@ app.get('/api/reports', async (req, res) => {
 
 app.get('/api/reports/:id', async (req, res) => {
   try {
-    const [rows] = await db.query(`
+    const [rows] = await db.query(
+      `
       SELECT
         id,
         area,
         camera_id AS cameraId,
         type,
-        DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s') AS timestamp,
-        report_status AS reportStatus,
-        image,
-        color,
-        missing_helmet AS missingHelmet,
-        missing_vest AS missingVest
+        missing_items AS missingItems,
+        image_path AS imagePath,
+        DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s') AS timestamp
       FROM reports
       WHERE id = ?
-    `, [req.params.id])
+      LIMIT 1
+      `,
+      [req.params.id]
+    )
 
     if (rows.length === 0) {
-      return res.status(404).json({ message: 'Report not found' })
+      return res.status(404).json({ message: 'Report tidak ditemukan' })
     }
 
-    res.json(mapReportRow(rows[0]))
+    const row = rows[0]
+
+    res.json({
+      id: row.id,
+      area: row.area,
+      cameraId: row.cameraId,
+      type: row.type,
+      missingItems: row.missingItems,
+      imagePath: row.imagePath,
+      image: row.imagePath,
+      timestamp: row.timestamp,
+      reportStatus: 'New'
+    })
   } catch (error) {
     console.error('Gagal mengambil detail report:', error)
     res.status(500).json({ message: 'Gagal mengambil detail report' })
@@ -296,20 +377,23 @@ app.get('/api/reports/:id', async (req, res) => {
 
 app.post('/api/reports', async (req, res) => {
   try {
-    const { area, cameraId, type, timestamp, reportStatus, image } = req.body
-    const lowerType = String(type || '').toLowerCase()
+    const {
+      area,
+      cameraId,
+      type,
+      missingItems,
+      imagePath,
+      image,
+      timestamp
+    } = req.body
 
     const newReport = await insertReport({
       area,
       cameraId,
       type,
-      timestamp,
-      reportStatus,
-      image,
-      missingHelmet:
-        lowerType.includes('helmet') || lowerType.includes('all ppe') || lowerType.includes('multiple'),
-      missingVest:
-        lowerType.includes('vest') || lowerType.includes('all ppe') || lowerType.includes('multiple')
+      missingItems,
+      imagePath: imagePath || image || '',
+      timestamp
     })
 
     res.status(201).json({

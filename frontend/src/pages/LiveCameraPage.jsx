@@ -13,12 +13,10 @@ export default function LiveCameraPage() {
   }, [])
 
   return (
-    <div className="page-content">
-      <div className="page-header">
-        <div>
-          <h1>Live Camera Monitoring</h1>
-          <p>Daftar kamera aktif dan status pemantauan area produksi.</p>
-        </div>
+    <div className="live-camera-page">
+      <div className="live-camera-page-header">
+        <h1>Live Camera Monitoring</h1>
+        <p>Daftar kamera aktif dan status pemantauan area produksi.</p>
       </div>
 
       <div className="live-camera-grid">
@@ -38,8 +36,10 @@ export default function LiveCameraPage() {
               </div>
             </div>
 
-            <h3>{camera.name}</h3>
-            <p>{camera.location}</p>
+            <div className="live-camera-info">
+              <h3>{camera.name}</h3>
+              <p>{camera.location}</p>
+            </div>
 
             <Link to={`/live-camera/${camera.id}`} className="live-camera-link">
               Lihat Detail
