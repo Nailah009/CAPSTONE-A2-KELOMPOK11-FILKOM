@@ -1,6 +1,6 @@
 # 🛡️ Smart K3 Vision Dashboard
 
-**Smart K3 Vision Dashboard** adalah sistem monitoring K3 Smart-Factory berbasis **Computer Vision** yang digunakan untuk membantu pemantauan kepatuhan penggunaan APD pekerja secara lebih cepat, terstruktur, dan terdokumentasi.
+**Smart K3 Vision Dashboard** adalah sistem monitoring K3 Smart-Factory berbasis **Computer Vision** untuk membantu pemantauan kepatuhan penggunaan APD pekerja secara realtime, terstruktur, dan terdokumentasi.
 
 Project ini dikembangkan untuk mendukung:
 
@@ -10,37 +10,61 @@ Project ini dikembangkan untuk mendukung:
 
 ## 📌 Deskripsi Singkat
 
-Sistem ini membaca input kamera, kemudian memproses frame video menggunakan model **YOLO** untuk mendeteksi objek pekerja dan atribut APD seperti **helmet, vest, shoes, dan gloves**.
+Sistem membaca input kamera laptop/webcam atau CCTV, lalu memproses frame menggunakan **YOLO** untuk mendeteksi pekerja dan APD utama.
 
-Jika sistem mendeteksi pekerja yang tidak menggunakan APD lengkap, maka data pelanggaran akan dikirim ke backend dan ditampilkan secara realtime pada dashboard monitoring.
+Model AI versi saat ini menggunakan **3 class**:
 
-Dashboard ini membantu supervisor untuk melihat:
+```text
+person
+helmet
+vest
+```
 
-- jumlah pelanggaran K3,
-- jenis pelanggaran paling sering,
-- status kamera,
-- laporan pelanggaran,
-- detail pelanggaran,
-- serta export laporan ke PDF.
+Jika pekerja tidak menggunakan APD sesuai ketentuan, sistem akan membuat report pelanggaran, menyimpan bukti gambar, mengirim data ke backend, menyimpan data ke MySQL, lalu menampilkan laporan pada dashboard.
+
+Jenis pelanggaran yang digunakan:
+
+```text
+Missing All PPE
+Missing helmet
+Missing vest
+```
+
+Mapping deteksi:
+
+| Kondisi | Label Live Camera | Type Reports | Missing Items |
+|---|---|---|---|
+| Helmet dan vest lengkap | COMPLETED / AMAN | Tidak masuk report | - |
+| Helmet tidak terdeteksi | MISSING: HELMET | Missing helmet | helmet |
+| Vest tidak terdeteksi | MISSING: VEST | Missing vest | vest |
+| Helmet dan vest tidak terdeteksi | MISSING ALL PPE | Missing All PPE | helmet, vest |
+
+Data aman tidak disimpan ke reports, karena reports hanya mencatat pelanggaran.
 
 ---
 
 ## 🧠 Alur Sistem
 
 ```text
-Kamera / Webcam / CCTV
+Kamera Laptop / Webcam / CCTV
         ↓
-OpenCV Video Processing
+AI Service Python
         ↓
-YOLO Object Detection
+OpenCV + YOLO Detection
         ↓
-Deteksi Person + APD
+Deteksi Person, Helmet, Vest
         ↓
 Cek Kelengkapan APD
         ↓
-Kirim Data Pelanggaran ke Backend
+Capture Bukti Pelanggaran
         ↓
-Dashboard Menampilkan Data Realtime
+Simpan Gambar ke Backend Uploads
+        ↓
+Kirim Data Pelanggaran ke Backend API
+        ↓
+Backend Express Menyimpan Data ke MySQL
+        ↓
+Frontend React Menampilkan Dashboard, Live Camera, Reports, dan Detail Report
 ```
 
 ---
@@ -49,7 +73,7 @@ Dashboard Menampilkan Data Realtime
 
 ### 📊 Dashboard Monitoring
 
-Menampilkan ringkasan kondisi monitoring K3, seperti:
+Dashboard utama menampilkan:
 
 - Total Violations
 - Most Frequent Violation
@@ -58,46 +82,118 @@ Menampilkan ringkasan kondisi monitoring K3, seperti:
 - Daily Violations Chart
 - Violation Types Overview
 - Recent Reports
+- Filter tanggal
+- Refresh data dashboard
+- Pagination Recent Reports
+- Tombol Lihat Detail pada report terbaru
 
 ### 🎥 Live Camera
 
-Menampilkan daftar kamera yang digunakan untuk monitoring area kerja.
+Halaman **Live Camera** menampilkan daftar kamera monitoring.
 
-Fitur ini mencakup daftar kamera, status kamera aktif/tidak aktif, lokasi kamera, dan halaman detail kamera.
+Fitur Live Camera:
+
+- daftar kamera,
+- status `Active` atau `Inactive`,
+- lokasi kamera,
+- halaman detail kamera,
+- live stream kamera,
+- hasil deteksi YOLO dengan bounding box,
+- warna bounding box berdasarkan status APD.
+
+Mapping warna bounding box:
+
+| Warna | Kondisi | Label |
+|---|---|---|
+| Hijau | APD lengkap | COMPLETED / AMAN |
+| Kuning | Salah satu APD tidak terdeteksi | MISSING: HELMET / MISSING: VEST |
+| Merah | Helmet dan vest tidak terdeteksi | MISSING ALL PPE |
+
+Kamera utama demo lokal:
+
+```text
+CAM-LAPTOP
+Laptop Webcam
+```
+
+AI stream berjalan di:
+
+```text
+http://127.0.0.1:5055/video-feed
+```
 
 ### 🚨 Reports
 
-Menampilkan daftar pelanggaran yang terdeteksi oleh sistem.
+Halaman Reports menampilkan daftar laporan pelanggaran.
 
-Data report berisi ID pelanggaran, area, ID kamera, tipe pelanggaran, timestamp, dan status laporan.
-
-### 📄 Export PDF
-
-Sistem menyediakan fitur export laporan ke PDF untuk kebutuhan dokumentasi atau pelaporan.
-
-### 🤖 AI Detection Service
-
-AI service berjalan menggunakan Python, OpenCV, dan YOLO.
-
-Model mendeteksi class berikut:
+Kolom tabel:
 
 ```text
-person
-helmet
-vest
-shoes
-gloves
+ID
+Area
+Camera
+Type
+Timestamp
+Action
 ```
 
-Jika APD tidak lengkap, sistem akan mengirimkan report seperti:
+Filter type selalu menyediakan:
 
 ```text
+All
 Missing All PPE
 Missing helmet
 Missing vest
-Missing shoes
-Missing gloves
 ```
+
+Jika filter dipilih tetapi data belum tersedia, tabel akan kosong. Ini normal karena filter digunakan untuk memilih jenis laporan yang ingin dilihat atau dicetak.
+
+### 📄 Detail Report
+
+Halaman Detail Report menampilkan:
+
+- ID
+- Area
+- Camera
+- Type
+- Timestamp
+- Violation Evidence
+
+Bukti pelanggaran diambil dari kolom `image_path` pada database. File gambar aslinya disimpan di backend:
+
+```text
+backend/uploads/violations/
+```
+
+Contoh URL gambar yang tersimpan di database:
+
+```text
+http://localhost:5000/uploads/violations/VIO-20260512015230.jpg
+```
+
+Dengan alur ini, gambar bukti tetap dapat diakses selama backend berjalan, meskipun AI service sedang tidak dijalankan.
+
+### 📄 Export PDF
+
+Sistem menyediakan fitur export laporan ke PDF berdasarkan filter area dan type.
+
+### 🔐 Login
+
+Login menggunakan:
+
+```text
+username
+password
+```
+
+Tidak ada register user dari frontend. Akun dikelola melalui database oleh admin/pengelola sistem.
+
+Role:
+
+| Role | Akses |
+|---|---|
+| Supervisor | Dashboard, Live Camera, Reports, Analytics, Settings |
+| General Manager | Dashboard, Reports |
 
 ---
 
@@ -107,6 +203,8 @@ Missing gloves
 
 - React.js
 - Vite
+- React Router DOM
+- Axios
 - Recharts
 - Lucide React
 - jsPDF
@@ -117,66 +215,234 @@ Missing gloves
 
 - Node.js
 - Express.js
-- REST API
+- MySQL2
 - CORS
+- Dotenv
+- Multer
+- REST API
+- Static file serving untuk evidence images
+
+### Database
+
+- MySQL
+
+Database name:
+
+```text
+smart_k3_vision
+```
+
+Tabel utama:
+
+```text
+cameras
+reports
+users
+```
 
 ### AI Service
 
 - Python
 - OpenCV
+- Flask
+- Flask-CORS
 - Ultralytics YOLO
 - Requests
-
-### Database
-
-Saat ini sistem **belum menggunakan database permanen**. Data report masih disimpan sementara di memory backend.
-
-Untuk pengembangan berikutnya, sistem dapat menggunakan PostgreSQL, MySQL, atau MongoDB.
+- NumPy
 
 ---
 
 ## 📁 Struktur Project
 
 ```text
-smart-k3-vision-dashboard/
+CAPSTONE-A2-KELOMPOK11-FILKOM/
 │
 ├── backend/
-│   ├── server.js
+│   ├── db.js
+│   ├── database.sql
 │   ├── package.json
-│   └── node_modules/
+│   ├── package-lock.json
+│   ├── server.js
+│   └── uploads/
+│       └── violations/
 │
 ├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── services/
-│   │   ├── App.jsx
-│   │   └── styles.css
+│   ├── index.html
 │   ├── package.json
-│   └── vite.config.js
+│   ├── package-lock.json
+│   ├── vite.config.js
+│   └── src/
+│       ├── components/
+│       │   └── Layout.jsx
+│       ├── pages/
+│       │   ├── CameraDetailPage.jsx
+│       │   ├── DashboardPage.jsx
+│       │   ├── LiveCameraPage.jsx
+│       │   ├── LoginPage.jsx
+│       │   ├── ReportsPage.jsx
+│       │   └── ReportDetailPage.jsx
+│       ├── services/
+│       │   └── api.js
+│       ├── utils/
+│       │   ├── auth.js
+│       │   └── timeStatus.js
+│       ├── App.jsx
+│       ├── main.jsx
+│       └── styles.css
 │
-└── ai-service/
-    ├── opencv.py
-    ├── test.py
-    ├── best.pt
-    └── .venv/
+├── model-ai/
+│   ├── best.pt
+│   └── opencv.py
+│
+├── .gitignore
+└── README.md
 ```
+
+---
+
+## ⚙️ Persiapan Database MySQL
+
+Pastikan MySQL sudah berjalan. Jika menggunakan XAMPP, nyalakan:
+
+```text
+MySQL
+```
+
+Buat database dan tabel dengan menjalankan:
+
+```text
+backend/database.sql
+```
+
+Database:
+
+```text
+smart_k3_vision
+```
+
+Tabel utama:
+
+```text
+cameras
+reports
+users
+```
+
+---
+
+## 🗃️ Struktur Tabel Reports
+
+Kolom utama:
+
+```text
+id
+area
+camera_id
+type
+missing_items
+image_path
+timestamp
+created_at
+```
+
+Contoh data:
+
+| id | area | camera_id | type | missing_items | image_path | timestamp |
+|---|---|---|---|---|---|---|
+| RPT-1777939851484 | Webcam Test Area | CAM-LAPTOP | Missing All PPE | helmet, vest | http://localhost:5000/uploads/violations/VIO-xxxx.jpg | 2026-05-12 07:10:51 |
+
+---
+
+## 👤 Struktur Tabel Users
+
+Kolom utama:
+
+```text
+id
+name
+username
+password
+role
+status
+created_at
+```
+
+Contoh akun demo:
+
+```text
+username: wahyu
+password: wahyu123
+role: supervisor
+```
+
+```text
+username: manager
+password: manager123
+role: general_manager
+```
+
+---
+
+## 🔐 Konfigurasi Backend `.env`
+
+Buat file `.env` di folder `backend`:
+
+```text
+backend/.env
+```
+
+Isi:
+
+```env
+PORT=5000
+
+DB_HOST=127.0.0.1
+DB_PORT=3307
+DB_USER=root
+DB_PASSWORD=
+DB_NAME=smart_k3_vision
+
+UPLOAD_DIR=uploads/violations
+```
+
+Jika MySQL menggunakan port default XAMPP:
+
+```env
+DB_PORT=3306
+```
+
+File `.env` tidak perlu di-push ke GitHub.
 
 ---
 
 ## 🚀 Cara Menjalankan Project
 
-Project ini dijalankan menggunakan **3 terminal berbeda**:
+Project dijalankan menggunakan 4 komponen:
 
 ```text
-Terminal 1 → Backend
-Terminal 2 → Frontend
-Terminal 3 → AI Service
+1. MySQL
+2. Backend
+3. Frontend
+4. AI Service
 ```
+
+Gunakan terminal terpisah untuk backend, frontend, dan AI service.
 
 ---
 
-## 1️⃣ Menjalankan Backend
+## 1️⃣ Menjalankan MySQL
+
+Jika menggunakan XAMPP:
+
+```text
+Start MySQL
+```
+
+Pastikan database `smart_k3_vision` sudah tersedia dan tabel sudah dibuat dari `backend/database.sql`.
+
+---
+
+## 2️⃣ Menjalankan Backend
 
 Masuk ke folder backend:
 
@@ -190,37 +456,44 @@ Install dependency:
 npm install
 ```
 
-Jalankan server:
+Jalankan backend:
 
 ```bash
 npm run dev
 ```
 
-Backend akan berjalan di:
+Backend berjalan di:
 
 ```text
 http://localhost:5000
 ```
 
-Untuk mengecek backend:
+Cek health endpoint:
 
 ```text
 http://localhost:5000/api/health
 ```
 
-Jika berhasil, akan muncul:
+Jika berhasil:
 
 ```json
 {
-  "status": "ok"
+  "status": "ok",
+  "database": "connected"
 }
+```
+
+Backend juga menyajikan evidence image:
+
+```text
+http://localhost:5000/uploads/violations/NAMA_FILE.jpg
 ```
 
 ---
 
-## 2️⃣ Menjalankan Frontend
+## 3️⃣ Menjalankan Frontend
 
-Buka terminal baru, lalu masuk ke folder frontend:
+Masuk ke folder frontend:
 
 ```bash
 cd frontend
@@ -238,26 +511,30 @@ Jalankan frontend:
 npm run dev
 ```
 
-Frontend akan berjalan di:
+Frontend berjalan di:
 
 ```text
 http://localhost:5173
 ```
 
-Buka dashboard melalui browser:
+Halaman penting:
 
 ```text
+http://localhost:5173/login
 http://localhost:5173/dashboard
+http://localhost:5173/live-camera
+http://localhost:5173/live-camera/CAM-LAPTOP
+http://localhost:5173/reports
 ```
 
 ---
 
-## 3️⃣ Menjalankan AI Service
+## 4️⃣ Menjalankan AI Service
 
-Masuk ke folder AI service:
+Masuk ke folder model AI:
 
 ```bash
-cd ai-service
+cd model-ai
 ```
 
 Aktifkan virtual environment:
@@ -266,17 +543,17 @@ Aktifkan virtual environment:
 .\.venv\Scripts\Activate.ps1
 ```
 
-Jika PowerShell memblokir script, jalankan:
+Jika PowerShell memblokir script:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\.venv\Scripts\Activate.ps1
 ```
 
-Install library Python jika belum:
+Install library Python:
 
 ```bash
-python -m pip install ultralytics opencv-python requests
+python -m pip install ultralytics opencv-python requests flask flask-cors numpy
 ```
 
 Jalankan AI service:
@@ -285,17 +562,21 @@ Jalankan AI service:
 python opencv.py
 ```
 
-Jika berhasil, terminal akan menampilkan log seperti:
+AI stream berjalan di:
 
 ```text
-[INGEST] Kamera berhasil dibuka!
-[YOLO] Class model: {0: 'person', 1: 'helmet', 2: 'vest', 3: 'shoes', 4: 'gloves'}
-[API] Pelanggaran terkirim: Missing All PPE
+http://127.0.0.1:5055
+```
+
+Cek stream:
+
+```text
+http://127.0.0.1:5055/video-feed
 ```
 
 ---
 
-## 🔗 Endpoint API
+## 🔗 Endpoint API Backend
 
 ### Health Check
 
@@ -303,7 +584,20 @@ Jika berhasil, terminal akan menampilkan log seperti:
 GET /api/health
 ```
 
-Digunakan untuk mengecek apakah backend berjalan.
+### Auth Login
+
+```http
+POST /api/auth/login
+```
+
+Contoh payload:
+
+```json
+{
+  "username": "wahyu",
+  "password": "wahyu123"
+}
+```
 
 ### Dashboard Data
 
@@ -311,7 +605,11 @@ Digunakan untuk mengecek apakah backend berjalan.
 GET /api/dashboard
 ```
 
-Digunakan frontend untuk mengambil data statistik dashboard.
+Dengan filter tanggal:
+
+```http
+GET /api/dashboard?date=2026-05-12
+```
 
 ### Cameras
 
@@ -319,8 +617,6 @@ Digunakan frontend untuk mengambil data statistik dashboard.
 GET /api/cameras
 GET /api/cameras/:id
 ```
-
-Digunakan untuk mengambil data kamera dan detail kamera.
 
 ### Reports
 
@@ -330,18 +626,16 @@ GET /api/reports/:id
 POST /api/reports
 ```
 
-Endpoint `POST /api/reports` digunakan oleh AI service untuk mengirim data pelanggaran ke backend.
-
-Contoh payload:
+Contoh payload dari AI service:
 
 ```json
 {
   "area": "Webcam Test Area",
   "cameraId": "CAM-LAPTOP",
   "type": "Missing All PPE",
-  "timestamp": "2026-05-05 07:10:51",
-  "reportStatus": "New",
-  "image": ""
+  "missingItems": "helmet, vest",
+  "imagePath": "http://localhost:5000/uploads/violations/VIO-20260512015230.jpg",
+  "timestamp": "2026-05-12 07:10:51"
 }
 ```
 
@@ -349,58 +643,87 @@ Contoh payload:
 
 ## 🧪 Cara Kerja Deteksi APD
 
-Model YOLO mendeteksi beberapa objek utama:
+Model YOLO mendeteksi 3 class utama:
 
 | Class | Keterangan |
 |---|---|
 | person | Pekerja / manusia |
 | helmet | Helm keselamatan |
 | vest | Rompi keselamatan |
-| shoes | Sepatu keselamatan |
-| gloves | Sarung tangan |
 
-Sistem akan mengecek apakah APD berada pada area bounding box pekerja. Jika ada APD yang tidak terdeteksi, maka sistem akan menandai kondisi tersebut sebagai pelanggaran.
-
-Contoh hasil:
+Contoh hasil live camera:
 
 ```text
-AMAN
+COMPLETED
 ```
 
-Jika APD lengkap.
+Jika pekerja menggunakan helmet dan vest.
+
+```text
+MISSING: HELMET
+```
+
+Jika helmet tidak terdeteksi.
+
+```text
+MISSING: VEST
+```
+
+Jika vest tidak terdeteksi.
+
+```text
+MISSING ALL PPE
+```
+
+Jika helmet dan vest sama-sama tidak terdeteksi.
+
+---
+
+## 📊 Mapping Tipe Pelanggaran Dashboard
+
+Data report di database:
 
 ```text
 Missing helmet
-```
-
-Jika helm tidak terdeteksi.
-
-```text
+Missing vest
 Missing All PPE
 ```
 
-Jika semua APD tidak terdeteksi.
+Pada Violation Types Overview, data diringkas menjadi:
+
+```text
+No Helmet
+No Vest
+Multiple PPE
+```
+
+Mapping:
+
+| Report Type | Dashboard Category |
+|---|---|
+| Missing helmet | No Helmet |
+| Missing vest | No Vest |
+| Missing All PPE | Multiple PPE |
 
 ---
 
-## 📊 Contoh Output di Dashboard
+## 🧭 Urutan Demo yang Disarankan
 
-Ketika AI service mendeteksi pelanggaran, data akan otomatis masuk ke dashboard.
-
-| ID | Area | Camera | Type | Timestamp | Status |
-|---|---|---|---|---|---|
-| RPT-1777939851484 | Webcam Test Area | CAM-LAPTOP | Missing All PPE | 2026-05-05 07:10:51 | New |
-
----
-
-## ⚠️ Catatan Penting
-
-- Dashboard sudah bisa menerima data realtime dari AI service.
-- Untuk demo lokal, kamera laptop dapat digunakan sebagai sumber input.
-- Jika ingin menggunakan CCTV/IP Camera, pastikan RTSP URL benar dan laptop berada di jaringan yang sama.
-- Data report saat ini masih tersimpan sementara di backend memory.
-- Jika backend direstart, data report yang masuk akan hilang.
-- Untuk versi production, sistem sebaiknya menggunakan database seperti PostgreSQL atau MySQL.
+```text
+1. Start MySQL
+2. Jalankan backend
+3. Cek http://localhost:5000/api/health
+4. Jalankan frontend
+5. Login sebagai supervisor
+6. Buka dashboard
+7. Jalankan AI service dengan python opencv.py
+8. Buka Live Camera Detail CAM-LAPTOP
+9. Tunjukkan bounding box hijau/kuning/merah
+10. Tunjukkan report masuk ke database dan halaman Reports
+11. Buka Detail Report untuk melihat evidence image
+12. Matikan AI service, lalu buka kembali Detail Report untuk membuktikan evidence tetap muncul selama backend berjalan
+13. Export PDF dari halaman Reports
+```
 
 ---
 
@@ -410,42 +733,63 @@ Ketika AI service mendeteksi pelanggaran, data akan otomatis masuk ke dashboard.
 |---|---|
 | Frontend Dashboard | ✅ Berjalan |
 | Backend API | ✅ Berjalan |
-| AI Service YOLO | ✅ Berjalan |
+| Database MySQL | ✅ Berjalan |
+| Login username/password | ✅ Berjalan |
+| Role access Supervisor / General Manager | ✅ Tersedia |
+| AI Service YOLO 3 Class | ✅ Berjalan |
 | Kamera Laptop | ✅ Berhasil |
-| Realtime Report ke Dashboard | ✅ Berhasil |
+| Live Camera Stream ke Dashboard | ✅ Berhasil |
+| Realtime Report ke MySQL | ✅ Berhasil |
+| Evidence Image dari Backend Uploads | ✅ Berhasil |
+| Reports Filter | ✅ Berhasil |
+| Reports Pagination | ✅ Berhasil |
+| Detail Report | ✅ Berhasil |
 | Export PDF | ✅ Tersedia |
-| Database Permanen | ⏳ Belum |
+| Google OAuth / SSO | ❌ Tidak digunakan |
+| Register User | ❌ Tidak digunakan |
 | RTSP CCTV Asli | ⏳ Menyesuaikan akses kamera |
+
+---
+
+## ⚠️ Catatan Penting
+
+- Sistem deteksi saat ini hanya menggunakan 3 class: `person`, `helmet`, dan `vest`.
+- Class `shoes` dan `gloves` tidak digunakan pada versi saat ini.
+- Data report tersimpan di MySQL, sehingga tidak hilang saat backend direstart.
+- Evidence image disimpan pada `backend/uploads/violations`.
+- Database menyimpan URL gambar pada kolom `image_path`.
+- Evidence image dapat diakses selama backend berjalan.
+- File `.env`, `node_modules`, `.venv`, dan hasil capture evidence tidak perlu di-push ke GitHub.
+- Jika ingin menggunakan CCTV/IP Camera, pastikan RTSP URL benar dan perangkat berada pada jaringan yang sama.
+- Password pada versi demo masih sederhana. Untuk production, gunakan hashing seperti bcrypt.
 
 ---
 
 ## 🔮 Pengembangan Selanjutnya
 
-Beberapa fitur yang dapat dikembangkan:
-
-- integrasi database PostgreSQL/MySQL,
-- upload dan penyimpanan gambar bukti pelanggaran,
-- autentikasi login supervisor/admin,
-- filter laporan berdasarkan tanggal, kamera, dan tipe pelanggaran,
-- status penanganan laporan seperti New, In Review, Resolved,
+- user management untuk admin,
+- hashing password menggunakan bcrypt,
+- audit log perubahan user,
 - notifikasi realtime saat pelanggaran terdeteksi,
-- penggunaan CCTV/IP Camera melalui RTSP,
+- integrasi RTSP CCTV asli,
+- dashboard analytics lanjutan,
 - deployment backend dan frontend.
 
 ---
 
 ## 👥 Tim Pengembang
 
-Project ini dikembangkan sebagai bagian dari project capstone dengan fokus pada penerapan:
+Project ini dikembangkan sebagai bagian dari project capstone dengan fokus pada:
 
 - Computer Vision,
 - Smart Factory,
 - Monitoring K3,
 - Dashboard Analytics,
-- integrasi sistem berbasis API.
+- integrasi sistem berbasis API,
+- penyimpanan data menggunakan database MySQL.
 
 ---
 
 ## 📌 Kesimpulan
 
-Smart K3 Vision Dashboard berhasil mengintegrasikan modul computer vision dengan sistem dashboard monitoring. Kamera diproses menggunakan OpenCV dan YOLO untuk mendeteksi kelengkapan APD pekerja. Jika ditemukan pelanggaran, data dikirim ke backend dan ditampilkan secara realtime pada dashboard sehingga supervisor dapat memantau kondisi keselamatan kerja secara lebih cepat, rapi, dan terdokumentasi.
+Smart K3 Vision Dashboard berhasil mengintegrasikan model computer vision dengan sistem dashboard monitoring K3. Kamera diproses menggunakan OpenCV dan YOLO untuk mendeteksi pekerja serta penggunaan APD berupa helmet dan vest. Jika ditemukan pelanggaran, sistem menyimpan bukti gambar, mengirim data ke backend, menyimpan laporan ke MySQL, dan menampilkan hasilnya pada dashboard secara realtime.
