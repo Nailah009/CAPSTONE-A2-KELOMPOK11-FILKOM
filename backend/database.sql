@@ -16,19 +16,24 @@ CREATE TABLE IF NOT EXISTS reports (
   id VARCHAR(60) PRIMARY KEY,
   area VARCHAR(100) NOT NULL,
   camera_id VARCHAR(50) NOT NULL,
-  type VARCHAR(150) NOT NULL,
+  type VARCHAR(100) NOT NULL,
+  missing_items VARCHAR(150) NOT NULL,
+  image_path TEXT,
   timestamp DATETIME NOT NULL,
-  report_status VARCHAR(50) DEFAULT 'New',
-  image TEXT,
-  color VARCHAR(20) DEFAULT '#ef4444',
-  missing_helmet BOOLEAN DEFAULT FALSE,
-  missing_vest BOOLEAN DEFAULT FALSE,
-  missing_shoes BOOLEAN DEFAULT FALSE,
-  missing_gloves BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (camera_id) REFERENCES cameras(id)
     ON UPDATE CASCADE
     ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS users (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  username VARCHAR(50) UNIQUE NOT NULL,
+  password VARCHAR(100) NOT NULL,
+  role ENUM('supervisor', 'general_manager') NOT NULL,
+  status ENUM('active', 'inactive') DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 INSERT IGNORE INTO cameras (id, name, location, status, rtsp_url, preview) VALUES
@@ -38,3 +43,7 @@ INSERT IGNORE INTO cameras (id, name, location, status, rtsp_url, preview) VALUE
 ('CAM-04', 'Camera 4', 'Parking Area', 'Inactive', '', 'https://placehold.co/1200x700/eaf2ff/2563eb?text=Camera+4'),
 ('CAM-05', 'Camera 5', 'Loading Bay', 'Inactive', '', 'https://placehold.co/1200x700/eaf2ff/2563eb?text=Camera+5'),
 ('CAM-LAPTOP', 'Laptop Webcam', 'Webcam Test Area', 'Active', '', 'https://placehold.co/1200x700/eaf2ff/2563eb?text=Laptop+Webcam');
+
+INSERT IGNORE INTO users (name, username, password, role, status) VALUES
+('Wahyu Hidayat', 'wahyu', 'wahyu123', 'supervisor', 'active'),
+('General Manager', 'manager', 'manager123', 'general_manager', 'active');
