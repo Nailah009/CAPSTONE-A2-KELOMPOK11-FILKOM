@@ -537,13 +537,17 @@ Masuk ke folder model AI:
 cd model-ai
 ```
 
-Aktifkan virtual environment:
-
-```powershell
-.\.venv\Scripts\Activate.ps1
+Buat file env:
+```bash
+python3 -m venv venv
 ```
 
-Jika PowerShell memblokir script:
+Aktifkan virtual environment:
+```bash
+venv\Scripts\activate
+```
+
+Jika PowerShell memblokir script: (jalankan di powershell as admin)
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
