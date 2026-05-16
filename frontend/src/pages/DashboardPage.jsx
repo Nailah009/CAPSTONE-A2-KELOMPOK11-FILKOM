@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, CalendarDays, RefreshCcw, ShieldCheck, Siren, Video } from 'lucide-react'
+import { AlertTriangle, CalendarDays, RefreshCcw, ShieldCheck, Siren, Video, AlertCircle } from 'lucide-react'
 import {
   Area,
   AreaChart,
@@ -74,6 +74,8 @@ export default function DashboardPage() {
   const endIndex = startIndex + reportsPerPage
 
   const paginatedReports = data.recentReports.slice(startIndex, endIndex)
+  const pendingReportsCount = data.recentReports.filter(r => r.validationStatus === 'pending').length
+  
   const statCards = [
     {
       title: 'Total Violations',
@@ -143,6 +145,23 @@ export default function DashboardPage() {
               className="hidden-real-date-input"
             />
           </div>
+
+          {pendingReportsCount > 0 && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.5rem 0.75rem',
+              backgroundColor: '#fef2f2',
+              border: '1px solid #fee2e2',
+              borderRadius: '0.375rem',
+              color: '#991b1b',
+              fontSize: '0.875rem'
+            }}>
+              <AlertCircle size={16} style={{ color: '#dc2626', animation: 'pulse 2s infinite' }} />
+              <span>{pendingReportsCount} pending reports</span>
+            </div>
+          )}
 
           <button
             type="button"
@@ -258,7 +277,7 @@ export default function DashboardPage() {
                 </div>
 
                 <span className={`status-pill ${cam.status.toLowerCase()}`}>
-                  {cam.status}
+                  {cam.status === 'Active' ? '● Active' : '○ Inactive'}
                 </span>
               </Link>
             ))}
@@ -282,6 +301,7 @@ export default function DashboardPage() {
                 <th>Camera</th>
                 <th>Type</th>
                 <th>Timestamp</th>
+                <th>Status</th>
                 <th>Action</th>
               </tr>
             </thead>
@@ -298,6 +318,26 @@ export default function DashboardPage() {
                     </div>
                   </td>
                   <td>{report.timestamp}</td>
+                  <td>
+                    <span style={{
+                      padding: '0.25rem 0.5rem',
+                      borderRadius: '0.25rem',
+                      fontSize: '0.75rem',
+                      fontWeight: '600',
+                      backgroundColor: 
+                        report.validationStatus === 'valid' ? '#d1fae5' :
+                        report.validationStatus === 'invalid' ? '#fee2e2' :
+                        '#fef3c7',
+                      color: 
+                        report.validationStatus === 'valid' ? '#065f46' :
+                        report.validationStatus === 'invalid' ? '#991b1b' :
+                        '#92400e'
+                    }}>
+                      {report.validationStatus === 'valid' ? '✓ Valid' :
+                       report.validationStatus === 'invalid' ? '✗ Invalid' :
+                       '⏳ Pending'}
+                    </span>
+                  </td>
                   <td>
                     <Link className="link-btn left-link" to={`/reports/${report.id}`}>
                       Lihat Detail

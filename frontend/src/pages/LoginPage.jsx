@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Lock, LogIn, ShieldCheck, User } from 'lucide-react'
 import api from '../services/api'
@@ -9,6 +9,41 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showBootstrap, setShowBootstrap] = useState(false)
+  const [bootstrapForm, setBootstrapForm] = useState({ name: '', username: '', password: '' })
+
+  useEffect(() => {
+    checkAdminExists()
+  }, [])
+
+  const checkAdminExists = async () => {
+    try {
+      const res = await api.get('/bootstrap/check-admin')
+      if (!res.data.adminExists) {
+        setShowBootstrap(true)
+      }
+    } catch (error) {
+      console.log('Could not check admin status')
+    }
+  }
+
+  const handleBootstrap = async (e) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+
+    try {
+      const res = await api.post('/bootstrap/init-admin', bootstrapForm)
+      setError('✓ Admin berhasil dibuat! Silakan login dengan akun admin tersebut.')
+      setShowBootstrap(false)
+      setBootstrapForm({ name: '', username: '', password: '' })
+    } catch (error) {
+      const message = error.response?.data?.message || 'Gagal membuat admin'
+      setError(message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -85,7 +120,66 @@ export default function LoginPage() {
               </p>
             </div>
 
-            <form className="login-form" onSubmit={handleSubmit}>
+            {showBootstrap ? (
+              <form className="login-form" onSubmit={handleBootstrap}>
+                <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: '#fef3c7', borderRadius: '8px', color: '#92400e' }}>
+                  <strong>⚠️ Inisialisasi Admin</strong>
+                  <p style={{ margin: '8px 0 0 0', fontSize: '14px' }}>
+                    Belum ada admin terdaftar. Buat akun admin pertama untuk melanjutkan.
+                  </p>
+                </div>
+
+                <label>
+                  Nama Lengkap
+                  <div className="login-input">
+                    <User size={22} />
+                    <input
+                      type="text"
+                      value={bootstrapForm.name}
+                      placeholder="Masukkan nama lengkap"
+                      onChange={(e) => setBootstrapForm({ ...bootstrapForm, name: e.target.value })}
+                      required
+                    />
+                  </div>
+                </label>
+
+                <label>
+                  Username
+                  <div className="login-input">
+                    <User size={22} />
+                    <input
+                      type="text"
+                      value={bootstrapForm.username}
+                      placeholder="Masukkan username"
+                      onChange={(e) => setBootstrapForm({ ...bootstrapForm, username: e.target.value })}
+                      required
+                    />
+                  </div>
+                </label>
+
+                <label>
+                  Password
+                  <div className="login-input">
+                    <Lock size={22} />
+                    <input
+                      type="password"
+                      value={bootstrapForm.password}
+                      placeholder="Masukkan password"
+                      onChange={(e) => setBootstrapForm({ ...bootstrapForm, password: e.target.value })}
+                      required
+                    />
+                  </div>
+                </label>
+
+                {error && <div className="login-error">{error}</div>}
+
+                <button type="submit" className="login-main-btn" disabled={loading}>
+                  <ShieldCheck size={24} />
+                  {loading ? 'MEMBUAT...' : 'BUAT ADMIN'}
+                </button>
+              </form>
+            ) : (
+              <form className="login-form" onSubmit={handleSubmit}>
               <label>
                 Username
                 <div className="login-input">
@@ -112,13 +206,14 @@ export default function LoginPage() {
                 </div>
               </label>
 
-              {error && <div className="login-error">{error}</div>}
+                {error && <div className="login-error">{error}</div>}
 
-              <button type="submit" className="login-main-btn" disabled={loading}>
-                <LogIn size={24} />
-                {loading ? 'LOGIN...' : 'LOGIN'}
-              </button>
-            </form>
+                <button type="submit" className="login-main-btn" disabled={loading}>
+                  <LogIn size={24} />
+                  {loading ? 'LOGIN...' : 'LOGIN'}
+                </button>
+              </form>
+            )}
           </div>
         </div>
       </section>

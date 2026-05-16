@@ -6,6 +6,7 @@ import LiveCameraPage from './pages/LiveCameraPage'
 import CameraDetailPage from './pages/CameraDetailPage'
 import ReportsPage from './pages/ReportsPage'
 import ReportDetailPage from './pages/ReportDetailPage'
+import AdminPage from './pages/AdminPage'
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
         <Route path="live-camera/:cameraId" element={<CameraDetailPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="reports/:reportId" element={<ReportDetailPage />} />
+        <Route path="admin" element={<AdminPage />} />
       </Route>
     </Routes>
   )

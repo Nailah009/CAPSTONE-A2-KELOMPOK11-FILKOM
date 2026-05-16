@@ -1,4 +1,4 @@
-import {AlertTriangle, Camera, LayoutDashboard, Settings, Shield, FileText, LogOut} from 'lucide-react'
+import {AlertTriangle, Camera, LayoutDashboard, Shield, FileText, LogOut, Settings} from 'lucide-react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { getCurrentUser, logout } from '../utils/auth'
 
@@ -6,8 +6,7 @@ const menus = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/live-camera', label: 'Live Camera', icon: Camera },
   { to: '/reports', label: 'Reports', icon: FileText },
-  { to: '/analytics', label: 'Analytics', icon: AlertTriangle },
-  { to: '/settings', label: 'Settings', icon: Settings }
+  { to: '/admin', label: 'Admin', icon: Settings }
 ]
 
 export default function Layout() {
@@ -19,12 +18,16 @@ export default function Layout() {
       ? 'General Manager'
       : user?.role === 'supervisor'
         ? 'Supervisor'
-        : 'User'
+        : user?.role === 'admin'
+          ? 'Admin'
+          : 'User'
 
-  const allowedMenus =
-    user?.role === 'general_manager'
-      ? menus.filter((item) => ['Dashboard', 'Reports'].includes(item.label))
-      : menus
+  const allowedMenus = 
+    user?.role === 'admin'
+      ? menus
+      : user?.role === 'general_manager'
+        ? menus.filter((item) => ['Dashboard', 'Reports'].includes(item.label))
+        : menus.filter((item) => ['Dashboard', 'Live Camera', 'Reports'].includes(item.label))
 
   const handleLogout = () => {
     logout()
