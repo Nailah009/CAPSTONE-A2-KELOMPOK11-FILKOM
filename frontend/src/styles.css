@@ -1451,6 +1451,49 @@ th {
   backdrop-filter: blur(8px) !important;
 }
 
+.sk3-inactive-stream {
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%) !important;
+}
+
+.sk3-inactive-stream h3 {
+  margin: 20px 0 10px !important;
+  color: #1e293b !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+}
+
+.sk3-inactive-stream p {
+  margin: 4px 0 !important;
+  color: #64748b !important;
+  font-size: 14px !important;
+  max-width: 300px !important;
+  text-align: center !important;
+}
+
+.sk3-inactive-stream .text-muted {
+  color: #94a3b8 !important;
+  font-size: 12px !important;
+  margin-top: 12px !important;
+}
+
+.text-success {
+  color: #16a34a !important;
+}
+
+.text-danger {
+  color: #ef4444 !important;
+}
+
+.rtsp-url {
+  word-break: break-all !important;
+}
+
 .sk3-info-card {
   height: fit-content !important;
   align-self: start !important;

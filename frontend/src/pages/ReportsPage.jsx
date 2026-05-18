@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Download, AlertCircle } from 'lucide-react'
+import { Download, AlertCircle, X } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import api from '../services/api'
@@ -12,6 +12,9 @@ export default function ReportsPage() {
 
   const [typeFilter, setTypeFilter] = useState('All')
   const [areaFilter, setAreaFilter] = useState('All')
+  const [validationStatusFilter, setValidationStatusFilter] = useState('All')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
   const [stats, setStats] = useState(null)
   const [trends, setTrends] = useState({
     time: [],
@@ -19,8 +22,25 @@ export default function ReportsPage() {
     type: []
   })
 
+  // Fetch data with filters
+  const fetchReports = async () => {
+    try {
+      const params = new URLSearchParams()
+      if (areaFilter !== 'All') params.append('area', areaFilter)
+      if (typeFilter !== 'All') params.append('type', typeFilter)
+      if (validationStatusFilter !== 'All') params.append('validationStatus', validationStatusFilter)
+      if (startDate) params.append('startDate', startDate)
+      if (endDate) params.append('endDate', endDate)
+
+      const response = await api.get(`/reports?${params.toString()}`)
+      setReports(response.data)
+    } catch (error) {
+      console.error('Error fetching reports:', error)
+    }
+  }
+
   useEffect(() => {
-    api.get('/reports').then((res) => setReports(res.data))
+    fetchReports()
     api.get('/reports/stats/summary').then((res) => setStats(res.data))
     
     Promise.all([
@@ -36,35 +56,45 @@ export default function ReportsPage() {
     })
   }, [])
 
-  const areas = ['All', ...new Set(reports.map((item) => item.area))]
-  const types = [
-    'All',
-    'Missing All PPE',
-    'Missing helmet',
-    'Missing vest'
-  ]
+  // Re-fetch when filters change
+  useEffect(() => {
+    fetchReports()
+  }, [typeFilter, areaFilter, validationStatusFilter, startDate, endDate])
 
-  const filteredReports = useMemo(() => {
-    return reports.filter((item) => {
-      const areaOk = areaFilter === 'All' || item.area === areaFilter
-      const typeOk = typeFilter === 'All' || item.type === typeFilter
-      return areaOk && typeOk
-    })
-  }, [reports, typeFilter, areaFilter])
+  const areas = ['All', ...new Set(reports.map((item) => item.area))]
+  const typeOptions = [
+    { value: 'All', label: 'All' },
+    { value: 'missing all ppe', label: 'Missing All PPE' },
+    { value: 'no helmet', label: 'No Helmet' },
+    { value: 'no vest', label: 'No Vest' },
+    { value: 'no gloves', label: 'No Gloves' },
+    { value: 'no shoes', label: 'No Shoes' }
+  ]
+  const validationStatuses = ['All', 'pending', 'valid', 'invalid']
 
   const pendingReportsCount = reports.filter(r => r.validationStatus === 'pending').length
 
-  const totalReports = filteredReports.length
+  const totalReports = reports.length
   const totalPages = Math.ceil(totalReports / reportsPerPage)
 
   const startIndex = (currentPage - 1) * reportsPerPage
   const endIndex = startIndex + reportsPerPage
 
-  const paginatedReports = filteredReports.slice(startIndex, endIndex)
+  const paginatedReports = reports.slice(startIndex, endIndex)
   
   useEffect(() => {
     setCurrentPage(1)
-  }, [typeFilter, areaFilter])
+  }, [typeFilter, areaFilter, validationStatusFilter, startDate, endDate])
+
+  const handleClearFilters = () => {
+    setTypeFilter('All')
+    setAreaFilter('All')
+    setValidationStatusFilter('All')
+    setStartDate('')
+    setEndDate('')
+  }
+
+  const hasActiveFilters = typeFilter !== 'All' || areaFilter !== 'All' || validationStatusFilter !== 'All' || startDate || endDate
 
   const handleExportPdf = () => {
     const doc = new jsPDF()
@@ -75,8 +105,18 @@ export default function ReportsPage() {
     yPosition += 8
     
     doc.setFontSize(11)
-    doc.text(`Area: ${areaFilter} | Type: ${typeFilter}`, 14, yPosition)
-    yPosition += 10
+    const filterText = [
+      areaFilter !== 'All' ? `Area: ${areaFilter}` : '',
+      typeFilter !== 'All' ? `Type: ${typeFilter}` : '',
+      startDate ? `From: ${startDate}` : '',
+      endDate ? `To: ${endDate}` : ''
+    ].filter(Boolean).join(' | ')
+    if (filterText) {
+      doc.text(filterText, 14, yPosition)
+      yPosition += 10
+    } else {
+      yPosition += 5
+    }
 
     // Total violations summary
     doc.setFontSize(12)
@@ -169,12 +209,13 @@ export default function ReportsPage() {
 
     autoTable(doc, {
       startY: 22,
-      head: [['ID', 'Area', 'Camera', 'Type', 'Timestamp']],
-      body: filteredReports.map((report) => [
+      head: [['ID', 'Area', 'Camera', 'Type', 'Status', 'Timestamp']],
+      body: paginatedReports.map((report) => [
         report.id.substring(0, 10),
         report.area,
         report.cameraId,
         report.type,
+        report.validationStatus.toUpperCase(),
         report.timestamp
       ]),
       margin: { left: 14, right: 14 }
@@ -235,7 +276,7 @@ export default function ReportsPage() {
           <h1 className="page-title">Reports</h1>
           <p className="page-subtitle">Daftar laporan pelanggaran yang ditangkap sistem computer vision.</p>
         </div>
-        <div className="toolbar-right" style={{ position: 'relative' }}>
+        <div className="toolbar-right" style={{ position: 'relative', gap: '0.5rem' }}>
           {pendingReportsCount > 0 && (
             <div style={{
               display: 'flex',
@@ -252,14 +293,148 @@ export default function ReportsPage() {
               <span>{pendingReportsCount} reports pending</span>
             </div>
           )}
-          <select className="select-box" value={areaFilter} onChange={(e) => setAreaFilter(e.target.value)}>
-            {areas.map((area) => <option key={area}>{area}</option>)}
-          </select>
-          <select className="select-box" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-            {types.map((type) => <option key={type}>{type}</option>)}
-          </select>
           <button className="primary-btn" onClick={handleExportPdf}><Download size={16} /> Export PDF</button>
         </div>
+      </div>
+
+      {/* Filter Section */}
+      <div style={{
+        backgroundColor: '#f8fafc',
+        border: '1px solid #e2e8f0',
+        borderRadius: '0.5rem',
+        padding: '1rem',
+        marginBottom: '1.5rem'
+      }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '1rem'
+        }}>
+          <h3 style={{ margin: '0', fontSize: '0.95rem', fontWeight: '600', color: '#0f172a' }}>
+            Filter Laporan
+          </h3>
+          {hasActiveFilters && (
+            <button
+              onClick={handleClearFilters}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+                padding: '0.25rem 0.75rem',
+                fontSize: '0.875rem',
+                backgroundColor: 'transparent',
+                border: '1px solid #cbd5e1',
+                borderRadius: '0.375rem',
+                color: '#64748b',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+              onMouseOver={(e) => {
+                e.target.style.backgroundColor = '#f1f5f9'
+                e.target.style.borderColor = '#94a3b8'
+              }}
+              onMouseOut={(e) => {
+                e.target.style.backgroundColor = 'transparent'
+                e.target.style.borderColor = '#cbd5e1'
+              }}
+            >
+              <X size={14} /> Clear Filters
+            </button>
+          )}
+        </div>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+          gap: '1rem'
+        }}>
+          {/* Area Filter */}
+          <div>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem', color: '#475569' }}>
+              Area
+            </label>
+            <select
+              className="select-box"
+              value={areaFilter}
+              onChange={(e) => setAreaFilter(e.target.value)}
+              style={{ width: '100%' }}
+            >
+              {areas.map((area) => <option key={area}>{area}</option>)}
+            </select>
+          </div>
+
+          {/* Type Filter */}
+          <div>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem', color: '#475569' }}>
+              Jenis Pelanggaran
+            </label>
+            <select
+              className="select-box"
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              style={{ width: '100%' }}
+            >
+              {typeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </div>
+
+          {/* Validation Status Filter */}
+          <div>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem', color: '#475569' }}>
+              Status Validasi
+            </label>
+            <select
+              className="select-box"
+              value={validationStatusFilter}
+              onChange={(e) => setValidationStatusFilter(e.target.value)}
+              style={{ width: '100%' }}
+            >
+              {validationStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {status === 'All' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Start Date Filter */}
+          <div>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem', color: '#475569' }}>
+              Tanggal Mulai
+            </label>
+            <input
+              type="date"
+              className="select-box"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+
+          {/* End Date Filter */}
+          <div>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem', color: '#475569' }}>
+              Tanggal Akhir
+            </label>
+            <input
+              type="date"
+              className="select-box"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Results Count */}
+      <div style={{
+        marginBottom: '1rem',
+        fontSize: '0.875rem',
+        color: '#64748b'
+      }}>
+        Menampilkan <strong>{totalReports > 0 ? startIndex + 1 : 0}</strong> - <strong>{Math.min(endIndex, totalReports)}</strong> dari <strong>{totalReports}</strong> laporan
       </div>
 
       <div id="reports-table" className="reports-table-card fixed-reports-card">
@@ -270,9 +445,9 @@ export default function ReportsPage() {
                 <th>ID</th>
                 <th>Area</th>
                 <th>Camera</th>
-                <th>Type</th>
-                <th>Timestamp</th>
-                <th>Status</th>
+                <th>Jenis Pelanggaran</th>
+                <th>Waktu</th>
+                <th>Status Validasi</th>
                 <th>Action</th>
               </tr>
             </thead>
@@ -281,7 +456,7 @@ export default function ReportsPage() {
               {paginatedReports.length > 0 ? (
                 paginatedReports.map((report) => (
                   <tr key={report.id}>
-                    <td>{report.id}</td>
+                    <td>{report.id.substring(0, 12)}</td>
                     <td>{report.area}</td>
                     <td>{report.cameraId}</td>
                     <td>{report.type}</td>

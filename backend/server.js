@@ -327,7 +327,82 @@ app.get('/api/cameras/:id', async (req, res) => {
 
 app.get('/api/reports', async (req, res) => {
   try {
-    const reports = await getReports()
+    const { area, type, validationStatus, startDate, endDate } = req.query
+    
+    // Build query
+    let query = `
+      SELECT
+        id,
+        area,
+        camera_id AS cameraId,
+        type,
+        missing_items AS missingItems,
+        image_path AS imagePath,
+        COALESCE(validation_status, 'pending') AS validationStatus,
+        DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s') AS timestamp
+      FROM reports
+      WHERE 1=1
+    `
+    
+    const params = []
+    
+    // Filter by area
+    if (area && area !== 'All') {
+      query += ` AND area = ?`
+      params.push(area)
+    }
+    
+    // Filter by type
+    if (type && type !== 'All') {
+      query += ` AND type = ?`
+      params.push(type)
+    }
+    
+    // Filter by validation status
+    if (validationStatus && validationStatus !== 'All') {
+      query += ` AND validation_status = ?`
+      params.push(validationStatus)
+    }
+    
+    // Filter by date range
+    if (startDate) {
+      query += ` AND DATE(timestamp) >= ?`
+      params.push(startDate)
+    }
+    if (endDate) {
+      query += ` AND DATE(timestamp) <= ?`
+      params.push(endDate)
+    }
+    
+    query += ` ORDER BY timestamp DESC`
+    
+    const [rows] = await db.query(query, params)
+    
+    const reports = rows.map((row) => ({
+      id: row.id,
+      area: row.area,
+      cameraId: row.cameraId,
+      type: row.type,
+      missingItems: row.missingItems,
+      imagePath: row.imagePath,
+      image: row.imagePath,
+      timestamp: row.timestamp,
+      validationStatus: row.validationStatus || 'pending',
+      reportStatus: 'New',
+      color:
+        row.type === 'Missing All PPE' || row.type === 'missing all ppe'
+          ? '#8b5cf6'
+          : row.type === 'no helmet' || row.type === 'Missing helmet'
+            ? '#2563eb'
+            : row.type === 'no vest' || row.type === 'Missing vest'
+              ? '#ef4444'
+              : row.type === 'no gloves' || row.type === 'Missing gloves'
+                ? '#06b6d4'
+                : row.type === 'no shoes' || row.type === 'Missing shoes'
+                  ? '#ec4899'
+                  : '#64748b'
+    }))
+    
     res.json(reports)
   } catch (error) {
     console.error('Gagal mengambil reports:', error)
@@ -869,14 +944,29 @@ app.put('/api/admin/cameras/:id', async (req, res) => {
     const { id } = req.params
     const { name, location, rtsp_url } = req.body
 
+    // Validasi input
+    if (!name || !location) {
+      return res.status(400).json({ message: 'Nama dan lokasi wajib diisi' })
+    }
+
+    // Validasi RTSP URL - jika diisi, harus valid
+    if (rtsp_url && rtsp_url.trim() !== '') {
+      const trimmedUrl = rtsp_url.trim()
+      // Hanya allow: RTSP URL, laptop address '0', atau URL lainnya
+      if (trimmedUrl !== '0' && !trimmedUrl.toLowerCase().startsWith('rtsp://') && 
+          !trimmedUrl.toLowerCase().startsWith('http')) {
+        return res.status(400).json({ message: 'RTSP URL harus valid (rtsp:// atau http://) atau "0" untuk laptop' })
+      }
+    }
+
     const hasRtspUrl = rtsp_url && rtsp_url.trim() !== ''
     const status = hasRtspUrl ? 'Active' : 'Inactive'
 
     await db.query(
       'UPDATE cameras SET name = ?, location = ?, rtsp_url = ?, status = ? WHERE id = ?',
-      [name, location, rtsp_url, status, id]
+      [name, location, rtsp_url || null, status, id]
     )
-    res.json({ message: 'Kamera berhasil diperbarui' })
+    res.json({ id, name, location, rtsp_url: rtsp_url || null, status, message: 'Kamera berhasil diperbarui' })
   } catch (error) {
     console.error('Gagal memperbarui kamera:', error)
     res.status(500).json({ message: 'Gagal memperbarui kamera' })
@@ -1052,9 +1142,9 @@ app.put('/api/admin/rules/:id', async (req, res) => {
 app.get('/api/admin/ai-config', async (req, res) => {
   try {
     const [cameras] = await db.query(`
-      SELECT id, name, rtsp_url, location
+      SELECT id, name, rtsp_url, location, status
       FROM cameras
-      WHERE status = 'Active'
+      ORDER BY created_at ASC
     `)
 
     const camerasWithRules = await Promise.all(
@@ -1068,6 +1158,7 @@ app.get('/api/admin/ai-config', async (req, res) => {
           name: cam.name,
           rtsp_url: cam.rtsp_url || '0',
           location: cam.location,
+          status: cam.status,
           rules: rules.length > 0 ? rules[0] : {
             enforce_helmet: true,
             enforce_vest: true,
