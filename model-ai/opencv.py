@@ -92,14 +92,21 @@ def fetch_all_cameras_config():
             new_config = {}
             for cam in cameras:
                 cam_id = cam.get('id')
-                rtsp_url = cam.get('rtsp_url', '0')
+                rtsp_url = cam.get('rtsp_url', '')
                 
                 # Determine camera source
                 camera_source = 0  # Default to laptop
-                if rtsp_url and rtsp_url != '0' and rtsp_url.strip():
-                    camera_source = rtsp_url
+                if rtsp_url and rtsp_url.strip():
+                    if rtsp_url.strip() == '0':
+                        camera_source = 0  # Explicitly use laptop camera
+                    else:
+                        camera_source = rtsp_url.strip()  # Use RTSP URL as string
                 
                 rules = cam.get('rules', {})
+                
+                # Check camera status dari database
+                camera_status = cam.get('status', 'Inactive')
+                is_active = camera_status == 'Active'
                 
                 new_config[cam_id] = {
                     'source': camera_source,
@@ -110,7 +117,7 @@ def fetch_all_cameras_config():
                     'enforce_vest': bool(rules.get('enforce_vest', True)),
                     'enforce_gloves': bool(rules.get('enforce_gloves', False)),
                     'enforce_shoes': bool(rules.get('enforce_shoes', True)),
-                    'is_active': camera_source != 0 or cam_id == "CAM-LAPTOP"  # Active if RTSP or laptop
+                    'is_active': is_active
                 }
             
             CAMERAS_CONFIG = new_config
@@ -119,7 +126,8 @@ def fetch_all_cameras_config():
             print("[CONFIG] ✅ Multi-camera config berhasil diambil")
             for cam_id, config in CAMERAS_CONFIG.items():
                 status = "ACTIVE" if config['is_active'] else "INACTIVE"
-                print(f"  - {cam_id} ({config['name']}) @ {config['area_name']}: {status}")
+                source_info = f"(source: {config['source']}, type: {type(config['source']).__name__})"
+                print(f"  - {cam_id} ({config['name']}) @ {config['area_name']}: {status} {source_info}")
             
             return True
     except Exception as e:
@@ -205,6 +213,7 @@ def ingest_camera_stream(camera_id):
     """
     Continuously read frames from camera (RTSP or laptop).
     Each camera gets its own thread.
+    Safely handles inactive cameras and invalid RTSP URLs.
     """
     global CAMERAS_CONFIG, ACTIVE_CAMERAS
     
@@ -214,9 +223,23 @@ def ingest_camera_stream(camera_id):
             continue
         
         config = CAMERAS_CONFIG[camera_id]
+        
+        # Skip if camera is not active
+        if not config.get('is_active', False):
+            print(f"[INGEST-{camera_id}] ⏸️ Kamera tidak aktif. Menunggu konfigurasi...")
+            time.sleep(3)
+            continue
+        
         camera_source = config['source']
         
+        # Validate camera source
+        if camera_source is None or (isinstance(camera_source, str) and not camera_source.strip()):
+            print(f"[INGEST-{camera_id}] ❌ RTSP URL kosong. Kamera tidak bisa dibuka.")
+            time.sleep(3)
+            continue
+        
         print(f"[INGEST-{camera_id}] Mencoba membuka kamera: {config['name']} @ {config['area_name']}...")
+        print(f"[INGEST-{camera_id}] Source: {camera_source} (type: {type(camera_source).__name__})")
         
         # Initialize camera state if not exists
         if camera_id not in ACTIVE_CAMERAS:
@@ -232,39 +255,47 @@ def ingest_camera_stream(camera_id):
 
         frame_queue = ACTIVE_CAMERAS[camera_id]['frame_queue']
 
-        if isinstance(camera_source, int):
-            cap = cv2.VideoCapture(camera_source)
-        else:
-            cap = cv2.VideoCapture(camera_source, cv2.CAP_FFMPEG)
+        try:
+            if isinstance(camera_source, int):
+                cap = cv2.VideoCapture(camera_source)
+            else:
+                cap = cv2.VideoCapture(camera_source, cv2.CAP_FFMPEG)
 
-        if not cap.isOpened():
-            print(f"[INGEST-{camera_id}] ❌ Kamera gagal dibuka. Mencoba lagi dalam 5 detik...")
-            time.sleep(5)
-            continue
+            if not cap.isOpened():
+                print(f"[INGEST-{camera_id}] ❌ Kamera gagal dibuka. Mencoba lagi dalam 5 detik...")
+                time.sleep(5)
+                continue
 
-        print(f"[INGEST-{camera_id}] ✅ Kamera berhasil dibuka!")
+            print(f"[INGEST-{camera_id}] ✅ Kamera berhasil dibuka!")
 
-        while True:
-            # Check if config updated
-            if camera_id not in CAMERAS_CONFIG:
-                print(f"[INGEST-{camera_id}] Kamera dihapus dari config, berhenti.")
-                break
-            
-            ret, frame = cap.read()
+            while True:
+                # Check if config updated or camera deactivated
+                if camera_id not in CAMERAS_CONFIG:
+                    print(f"[INGEST-{camera_id}] Kamera dihapus dari config, berhenti.")
+                    break
+                
+                if not CAMERAS_CONFIG[camera_id].get('is_active', False):
+                    print(f"[INGEST-{camera_id}] Kamera tidak lagi aktif, berhenti.")
+                    break
+                
+                ret, frame = cap.read()
 
-            if not ret:
-                print(f"[INGEST-{camera_id}] ⚠️ Stream terputus. Mencoba reconnect...")
-                break
+                if not ret:
+                    print(f"[INGEST-{camera_id}] ⚠️ Stream terputus. Mencoba reconnect...")
+                    break
 
-            if frame_queue.full():
-                try:
-                    frame_queue.get_nowait()
-                except queue.Empty:
-                    pass
+                if frame_queue.full():
+                    try:
+                        frame_queue.get_nowait()
+                    except queue.Empty:
+                        pass
 
-            frame_queue.put(frame)
+                frame_queue.put(frame)
 
-        cap.release()
+            cap.release()
+        except Exception as e:
+            print(f"[INGEST-{camera_id}] ❌ Error saat membuka/membaca kamera: {e}")
+        
         time.sleep(2)
 
 # ==========================================
@@ -282,6 +313,7 @@ def yolo_worker_multi():
     print(f"[YOLO] Class model: {model.names}")
 
     prev_time = time.time()
+    current_time = time.time()
 
     while True:
         # Periodically refresh camera config
