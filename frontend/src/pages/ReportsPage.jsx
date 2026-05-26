@@ -202,23 +202,46 @@ export default function ReportsPage() {
       }
     }
 
-    // Detailed reports table
+    // =========================================================================
+    // MODIFIKASI TABEL DETAIL LAPORAN BULANAN
+    // =========================================================================
     doc.addPage()
     doc.setFontSize(12)
-    doc.text('Detail Laporan', 14, 16)
+    doc.text('Detail Seluruh Laporan Pemantauan', 14, 16)
 
     autoTable(doc, {
       startY: 22,
-      head: [['ID', 'Area', 'Camera', 'Type', 'Status', 'Timestamp']],
-      body: paginatedReports.map((report) => [
-        report.id.substring(0, 10),
+      // 1. Menambahkan kolom 'Pelanggar' dan 'Catatan Pengawas' pada Header
+      head: [['ID', 'Area', 'Kamera', 'Jenis Pelanggaran', 'Status', 'Pelanggar', 'Catatan Pengawas', 'Waktu']],
+      
+      // 2. Menggunakan 'reports' agar seluruh data hasil filter terekspor
+      body: reports.map((report) => [
+        report.id.substring(0, 8),
         report.area,
         report.cameraId,
         report.type,
         report.validationStatus.toUpperCase(),
+        report.violatorName || '-', // Mengambil data nama pelanggar
+        report.notes || '-',        // Mengambil data keterangan tindak lanjut
         report.timestamp
       ]),
-      margin: { left: 14, right: 14 }
+      margin: { left: 14, right: 14 },
+      
+      // 3. Optimalisasi struktur agar fit
+      styles: { 
+        fontSize: 8,       // Memperkecil font sedikit ke ukuran 8 agar muat 8 kolom
+        cellPadding: 2 
+      },
+      columnStyles: {
+        0: { cellWidth: 15 }, // ID singkat
+        1: { cellWidth: 22 }, // Area
+        2: { cellWidth: 15 }, // Kamera
+        3: { cellWidth: 28 }, // Jenis Pelanggaran
+        4: { cellWidth: 18 }, // Status
+        5: { cellWidth: 25 }, // Nama Pelanggar
+        6: { cellWidth: 35 }, // Catatan (Diberikan porsi lebih lebar)
+        7: { cellWidth: 26 }  // Waktu
+      }
     })
 
     // Conclusions

@@ -56,7 +56,9 @@ export default function LoginPage() {
         password
       })
 
-      localStorage.setItem('smart_k3_user', JSON.stringify(res.data.user))
+      // PERBAIKAN: Mengubah kunci 'smart_k3_user' menjadi 'user' agar sinkron dengan App.jsx
+      localStorage.setItem('user', JSON.stringify(res.data.user))
+      
       navigate('/dashboard')
     } catch (error) {
       const message =

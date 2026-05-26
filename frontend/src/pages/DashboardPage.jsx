@@ -239,7 +239,7 @@ export default function DashboardPage() {
                 </PieChart>
               </ResponsiveContainer>
               <div className="donut-center">
-                <div className="center-value">1,248</div>
+                <div className="center-value">{data.stats.totalViolations}</div>
                 <div className="center-label">Total</div>
               </div>
             </div>
@@ -259,8 +259,18 @@ export default function DashboardPage() {
 
         <div className="panel card camera-status-panel">
           <div className="panel-header"><h3>Active Cameras</h3></div>
-          <div className="camera-status-list">
-            {data.activeCameras.slice(0, 5).map((cam) => (
+          
+          {/* MODIFIKASI: Menambahkan max-height dan overflowY untuk fitur Scroll Internal */}
+          <div 
+            className="camera-status-list"
+            style={{ 
+              maxHeight: '320px',    // Membatasi tinggi kotak agar tidak merusak layout dashboard
+              overflowY: 'auto',     // Memunculkan scrollbar vertikal jika isi melebihi tinggi
+              paddingRight: '0.5rem' // Memberi jarak agar scrollbar tidak menabrak teks
+            }}
+          >
+            {/* MODIFIKASI: Menghapus .slice(0, 5) agar SEMUA kamera (termasuk yang ke-6 dst) dirender */}
+            {data.activeCameras.map((cam) => (
               <Link
                 to={`/live-camera/${cam.id}`}
                 className="camera-status-item"

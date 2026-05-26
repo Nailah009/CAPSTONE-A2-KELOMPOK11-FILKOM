@@ -100,7 +100,9 @@ function mapReportRow(row) {
     image: row.image,
     color: row.color || getColorByType(row.type),
     missingHelmet: Boolean(row.missingHelmet),
-    missingVest: Boolean(row.missingVest)
+    missingVest: Boolean(row.missingVest),
+    violatorName: row.violatorName || '',
+    notes: row.notes || ''
   }
 }
 
@@ -128,6 +130,8 @@ async function getReports(date = null) {
       missing_items AS missingItems,
       image_path AS imagePath,
       COALESCE(validation_status, 'pending') AS validationStatus,
+      violator_name AS violatorName,
+      notes,
       DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s') AS timestamp
     FROM reports
   `
@@ -153,6 +157,8 @@ async function getReports(date = null) {
     image: row.imagePath,
     timestamp: row.timestamp,
     validationStatus: row.validationStatus || 'pending',
+    violatorName: row.violatorName || '',
+    notes: row.notes || '',
     reportStatus: 'New',
     color:
       row.type === 'Missing All PPE'
@@ -329,7 +335,6 @@ app.get('/api/reports', async (req, res) => {
   try {
     const { area, type, validationStatus, startDate, endDate } = req.query
     
-    // Build query
     let query = `
       SELECT
         id,
@@ -339,6 +344,8 @@ app.get('/api/reports', async (req, res) => {
         missing_items AS missingItems,
         image_path AS imagePath,
         COALESCE(validation_status, 'pending') AS validationStatus,
+        violator_name AS violatorName,
+        notes,
         DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s') AS timestamp
       FROM reports
       WHERE 1=1
@@ -346,25 +353,21 @@ app.get('/api/reports', async (req, res) => {
     
     const params = []
     
-    // Filter by area
     if (area && area !== 'All') {
       query += ` AND area = ?`
       params.push(area)
     }
     
-    // Filter by type
     if (type && type !== 'All') {
       query += ` AND type = ?`
       params.push(type)
     }
     
-    // Filter by validation status
     if (validationStatus && validationStatus !== 'All') {
       query += ` AND validation_status = ?`
       params.push(validationStatus)
     }
     
-    // Filter by date range
     if (startDate) {
       query += ` AND DATE(timestamp) >= ?`
       params.push(startDate)
@@ -388,6 +391,8 @@ app.get('/api/reports', async (req, res) => {
       image: row.imagePath,
       timestamp: row.timestamp,
       validationStatus: row.validationStatus || 'pending',
+      violatorName: row.violatorName || '',
+      notes: row.notes || '',
       reportStatus: 'New',
       color:
         row.type === 'Missing All PPE' || row.type === 'missing all ppe'
@@ -422,6 +427,8 @@ app.get('/api/reports/:id', async (req, res) => {
         missing_items AS missingItems,
         image_path AS imagePath,
         COALESCE(validation_status, 'pending') AS validationStatus,
+        violator_name AS violatorName,
+        notes,
         DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s') AS timestamp
       FROM reports
       WHERE id = ?
@@ -446,6 +453,8 @@ app.get('/api/reports/:id', async (req, res) => {
       image: row.imagePath,
       timestamp: row.timestamp,
       validationStatus: row.validationStatus || 'pending',
+      violatorName: row.violatorName || '',
+      notes: row.notes || '',
       reportStatus: 'New'
     })
   } catch (error) {
@@ -523,29 +532,46 @@ app.post('/api/violations/ingest', upload.single('image'), async (req, res) => {
   }
 })
 
+// === MODIFIKASI: LOGIKA PERHITUNGAN DASHBOARD ===
 app.get('/api/dashboard', async (req, res) => {
   try {
     const selectedDate = req.query.date
     const reportRows = await getReports(selectedDate)
     const totalViolations = reportRows.length
 
+    // Inisialisasi keranjang hitung untuk SEMUA kemungkinan dari AI
     const categoryCounts = {
       'No Helmet': 0,
       'No Vest': 0,
+      'No Gloves': 0,
+      'No Shoes': 0,
       'Multiple PPE': 0
     }
 
     reportRows.forEach((report) => {
-      const category = normalizeViolationType(report.type)
+      const typeStr = (report.type || '').toLowerCase()
 
-      if (categoryCounts[category] !== undefined) {
-        categoryCounts[category] += 1
+      // Penguraian string dinamis berdasarkan output dari opencv.py
+      if (typeStr.includes('missing all ppe') || typeStr.includes('multiple')) {
+        categoryCounts['Multiple PPE'] += 1
+      } else {
+        if (typeStr.includes('helmet')) categoryCounts['No Helmet'] += 1
+        if (typeStr.includes('vest')) categoryCounts['No Vest'] += 1
+        if (typeStr.includes('glove')) categoryCounts['No Gloves'] += 1
+        if (typeStr.includes('shoe')) categoryCounts['No Shoes'] += 1
       }
     })
 
-    const violationOverview = Object.entries(categoryCounts).map(([name, count]) => {
+    // Membuang kategori yang nilainya 0 agar tidak kosong di grafik
+    const filteredCategoryCounts = Object.entries(categoryCounts)
+      .filter(([name, count]) => count > 0)
+
+    // Menghitung total frekuensi seluruh pelanggaran (bisa lebih besar dari jumlah laporan)
+    const totalFrequencies = filteredCategoryCounts.reduce((sum, [_, c]) => sum + c, 0)
+
+    const violationOverview = filteredCategoryCounts.map(([name, count]) => {
       const percentage =
-        totalViolations > 0 ? ((count / totalViolations) * 100).toFixed(1) : '0.0'
+        totalFrequencies > 0 ? ((count / totalFrequencies) * 100).toFixed(1) : '0.0'
 
       return {
         name,
@@ -554,8 +580,9 @@ app.get('/api/dashboard', async (req, res) => {
       }
     })
 
-    const mostFrequent = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1])[0]
+    const mostFrequent = filteredCategoryCounts.sort((a, b) => b[1] - a[1])[0]
 
+    // SORTING ACTIVE CAMERAS
     const [cameraRows] = await db.query(`
       SELECT
         id,
@@ -565,7 +592,7 @@ app.get('/api/dashboard', async (req, res) => {
         rtsp_url AS rtspUrl,
         COALESCE(preview, ?) AS preview
       FROM cameras
-      ORDER BY id ASC
+      ORDER BY CASE WHEN status = 'Active' THEN 1 ELSE 2 END, id ASC
     `, [CAMERA_PREVIEW_FALLBACK])
 
     const activeCount = cameraRows.filter((cam) => cam.status === 'Active').length
@@ -584,12 +611,12 @@ app.get('/api/dashboard', async (req, res) => {
 
     const dynamicDashboard = {
       stats: {
-        totalViolations,
+        totalViolations, // Total Laporan / Insiden
         totalGrowth: 'Realtime',
         mostFrequentViolation: mostFrequent ? mostFrequent[0] : '-',
         topViolationShare:
-          totalViolations > 0 && mostFrequent
-            ? `${((mostFrequent[1] / totalViolations) * 100).toFixed(1)}%`
+          totalFrequencies > 0 && mostFrequent
+            ? `${((mostFrequent[1] / totalFrequencies) * 100).toFixed(1)}%`
             : '0%',
         monitoringCoverage,
         coverageGrowth: 'Live',
@@ -628,6 +655,8 @@ app.get('/api/reports/unvalidated/pending', async (req, res) => {
         missing_items AS missingItems,
         image_path AS imagePath,
         COALESCE(validation_status, 'pending') AS validationStatus,
+        violator_name AS violatorName,
+        notes,
         DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s') AS timestamp
       FROM reports
       WHERE COALESCE(validation_status, 'pending') = 'pending'
@@ -643,7 +672,9 @@ app.get('/api/reports/unvalidated/pending', async (req, res) => {
       imagePath: row.imagePath,
       image: row.imagePath,
       timestamp: row.timestamp,
-      validationStatus: row.validationStatus
+      validationStatus: row.validationStatus,
+      violatorName: row.violatorName || '',
+      notes: row.notes || ''
     }))
 
     res.json(reports)
@@ -655,7 +686,7 @@ app.get('/api/reports/unvalidated/pending', async (req, res) => {
 
 app.put('/api/reports/:id/validate', async (req, res) => {
   try {
-    const { validationStatus, validatedBy } = req.body
+    const { validationStatus, validatedBy, violatorName, notes } = req.body
     const reportId = req.params.id
 
     if (!['valid', 'invalid'].includes(validationStatus)) {
@@ -664,9 +695,9 @@ app.put('/api/reports/:id/validate', async (req, res) => {
 
     await db.query(`
       UPDATE reports
-      SET validation_status = ?, validated_at = NOW(), validated_by = ?
+      SET validation_status = ?, validated_at = NOW(), validated_by = ?, violator_name = ?, notes = ?
       WHERE id = ?
-    `, [validationStatus, validatedBy || null, reportId])
+    `, [validationStatus, validatedBy || null, violatorName || null, notes || null, reportId])
 
     res.json({ message: `Report berhasil divalidasi sebagai ${validationStatus}` })
   } catch (error) {
@@ -795,13 +826,12 @@ app.post('/api/bootstrap/init-admin', async (req, res) => {
       return res.status(409).json({ message: 'Username sudah terdaftar' })
     }
 
-    const userId = `USR-${Date.now()}`
     await db.query(
-      'INSERT INTO users (id, name, username, password, role, status, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())',
-      [userId, name, username, password, 'admin', 'active']
+      'INSERT INTO users (name, username, password, role, status, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
+      [name, username, password, 'admin', 'active']
     )
 
-    res.json({ id: userId, name, username, role: 'admin', status: 'active', message: 'Admin berhasil dibuat' })
+    res.json({ name, username, role: 'admin', status: 'active', message: 'Admin berhasil dibuat' })
   } catch (error) {
     console.error('Gagal membuat admin awal:', error)
     res.status(500).json({ message: 'Gagal membuat admin' })
@@ -852,13 +882,12 @@ app.post('/api/admin/users', async (req, res) => {
       return res.status(409).json({ message: 'Username sudah terdaftar' })
     }
 
-    const userId = `USR-${Date.now()}`
-    await db.query(
-      'INSERT INTO users (id, name, username, password, role, status, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())',
-      [userId, name, username, password, role, 'active']
+    const [result] = await db.query(
+      'INSERT INTO users (name, username, password, role, status, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
+      [name, username, password, role, 'active']
     )
 
-    res.json({ id: userId, name, username, role, status: 'active' })
+    res.json({ id: result.insertId, name, username, role, status: 'active' })
   } catch (error) {
     console.error('Gagal membuat pengguna:', error)
     res.status(500).json({ message: 'Gagal membuat pengguna' })

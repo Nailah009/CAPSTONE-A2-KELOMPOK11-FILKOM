@@ -1,8 +1,8 @@
 export function getCurrentUser() {
-  const user = localStorage.getItem('smart_k3_user')
+  const user = localStorage.getItem('user')
   return user ? JSON.parse(user) : null
 }
 
 export function logout() {
-  localStorage.removeItem('smart_k3_user')
+  localStorage.removeItem('user')
 }
