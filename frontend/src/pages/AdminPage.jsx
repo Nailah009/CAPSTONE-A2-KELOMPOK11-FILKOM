@@ -644,7 +644,7 @@ export default function AdminPage() {
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th>Camera ID</th>
+                    <th>Kamera</th>
                     <th>Helm</th>
                     <th>Rompi</th>
                     <th>Sarung Tangan</th>
@@ -653,40 +653,44 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rules.map(rule => (
-                    <tr key={rule.id}>
-                      <td>{rule.camera_id}</td>
-                      <td>
-                        <span className={`badge badge-${rule.enforce_helmet ? 'success' : 'danger'}`}>
-                          {rule.enforce_helmet ? 'Ya' : 'Tidak'}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`badge badge-${rule.enforce_vest ? 'success' : 'danger'}`}>
-                          {rule.enforce_vest ? 'Ya' : 'Tidak'}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`badge badge-${rule.enforce_gloves ? 'success' : 'danger'}`}>
-                          {rule.enforce_gloves ? 'Ya' : 'Tidak'}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`badge badge-${rule.enforce_shoes ? 'success' : 'danger'}`}>
-                          {rule.enforce_shoes ? 'Ya' : 'Tidak'}
-                        </span>
-                      </td>
-                      <td>
-                        <button
-                          className="btn-secondary btn-sm"
-                          onClick={() => handleEditRule(rule)}
-                          disabled={loading}
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {rules.map(rule => {
+                    const camera = cameras.find(cam => cam.id === rule.camera_id)
+                    const cameraDisplay = camera ? `${camera.name} (${camera.id})` : rule.camera_id
+                    return (
+                      <tr key={rule.id}>
+                        <td>{cameraDisplay}</td>
+                        <td>
+                          <span className={`badge badge-${rule.enforce_helmet ? 'success' : 'danger'}`}>
+                            {rule.enforce_helmet ? 'Ya' : 'Tidak'}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`badge badge-${rule.enforce_vest ? 'success' : 'danger'}`}>
+                            {rule.enforce_vest ? 'Ya' : 'Tidak'}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`badge badge-${rule.enforce_gloves ? 'success' : 'danger'}`}>
+                            {rule.enforce_gloves ? 'Ya' : 'Tidak'}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`badge badge-${rule.enforce_shoes ? 'success' : 'danger'}`}>
+                            {rule.enforce_shoes ? 'Ya' : 'Tidak'}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            className="btn-secondary btn-sm"
+                            onClick={() => handleEditRule(rule)}
+                            disabled={loading}
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -782,13 +786,18 @@ export default function AdminPage() {
               </div>
               <div className="form-group">
                 <label>Lokasi/Area</label>
-                <input
-                  type="text"
-                  placeholder="Masukkan lokasi kamera"
+                <select
                   value={formCamera.location}
                   onChange={e => setFormCamera({ ...formCamera, location: e.target.value })}
                   required
-                />
+                >
+                  <option value="">-- Pilih Area --</option>
+                  {areas.map(area => (
+                    <option key={area.id} value={area.name}>
+                      {area.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="form-group">
                 <label>RTSP URL atau Kamera Sumber</label>
@@ -869,7 +878,7 @@ export default function AdminPage() {
                   <option value="">-- Pilih Kamera --</option>
                   {cameras.map(cam => (
                     <option key={cam.id} value={cam.id}>
-                      {cam.name} ({cam.location})
+                      {cam.name} ({cam.id})
                     </option>
                   ))}
                 </select>
