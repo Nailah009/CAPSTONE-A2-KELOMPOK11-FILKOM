@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AlertCircle, CheckCircle, XCircle, User, FileText } from 'lucide-react'
 import api from '../services/api'
@@ -32,8 +32,8 @@ export default function ReportDetailPage() {
     }
 
     if (status === 'invalid' && !inputNotes.trim()) {
-      setValidationMessage('✗ Wajib mengisi catatan jika laporan dinyatakan Tidak Valid (Salah Deteksi).')
-      setTimeout(() => setValidationMessage(''), 3000)
+      setValidationMessage('✗ Wajib mengisi catatan jika laporan dinyatakan Tidak Valid.')
+      setTimeout(() => setValidationMessage(''), 10000)
       return
     }
 
@@ -188,7 +188,7 @@ export default function ReportDetailPage() {
                   value={inputViolatorName}
                   onChange={(e) => setInputViolatorName(e.target.value)}
                   placeholder="Contoh: Budi Santoso / Pekerja Subkon" 
-                  style={{ width: '100%', padding: '0.6rem', borderRadius: '0.375rem', border: '1px solid #d1d5db', fontSize: '0.875rem' }}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '0.375rem', border: '1px solid #d1d5db', fontSize: '0.875rem', resize: 'none' }}
                 />
               </div>
 
@@ -200,7 +200,7 @@ export default function ReportDetailPage() {
                   value={inputNotes}
                   onChange={(e) => setInputNotes(e.target.value)}
                   placeholder="Contoh: Sudah diberikan teguran lisan. / Salah deteksi AI, benda tersebut adalah tumpukan barang." 
-                  style={{ width: '100%', padding: '0.6rem', borderRadius: '0.375rem', border: '1px solid #d1d5db', minHeight: '80px', fontSize: '0.875rem', fontFamily: 'inherit' }}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '0.375rem', border: '1px solid #d1d5db', minHeight: '80px', fontSize: '0.875rem', fontFamily: 'inherit', resize: 'none' }}
                 />
               </div>
 
@@ -225,7 +225,7 @@ export default function ReportDetailPage() {
                     fontSize: '0.875rem', fontWeight: '500', opacity: isValidating ? 0.7 : 1
                   }}
                 >
-                  ✗ Not Valid
+                  ✗ Invalid
                 </button>
               </div>
             </div>

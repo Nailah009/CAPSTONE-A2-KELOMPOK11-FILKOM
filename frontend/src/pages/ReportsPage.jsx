@@ -16,6 +16,7 @@ export default function ReportsPage() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [stats, setStats] = useState(null)
+  const [allAreas, setAllAreas] = useState([])
   const [trends, setTrends] = useState({
     time: [],
     location: [],
@@ -39,8 +40,21 @@ export default function ReportsPage() {
     }
   }
 
+  // Fetch all areas from the API
+  const fetchAllAreas = async () => {
+    try {
+      const response = await api.get('/admin/areas')
+      const areaNames = response.data.map(area => area.name)
+      setAllAreas(['All', ...areaNames])
+    } catch (error) {
+      console.error('Error fetching areas:', error)
+      setAllAreas(['All'])
+    }
+  }
+
   useEffect(() => {
     fetchReports()
+    fetchAllAreas()
     api.get('/reports/stats/summary').then((res) => setStats(res.data))
     
     Promise.all([
@@ -61,7 +75,7 @@ export default function ReportsPage() {
     fetchReports()
   }, [typeFilter, areaFilter, validationStatusFilter, startDate, endDate])
 
-  const areas = ['All', ...new Set(reports.map((item) => item.area))]
+  const areas = allAreas
   const typeOptions = [
     { value: 'All', label: 'All' },
     { value: 'missing all ppe', label: 'Missing All PPE' },

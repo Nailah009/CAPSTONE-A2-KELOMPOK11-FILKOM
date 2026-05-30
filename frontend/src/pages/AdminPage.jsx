@@ -174,6 +174,7 @@ export default function AdminPage() {
   }
 
   const handleEditCamera = (camera) => {
+    fetchAreas()
     setFormCamera(camera)
     setEditingCamera(camera)
     setShowCameraModal(true)
@@ -481,6 +482,7 @@ export default function AdminPage() {
               onClick={() => {
                 setEditingCamera(null)
                 setFormCamera({ name: '', location: '', rtsp_url: '' })
+                fetchAreas()
                 setShowCameraModal(true)
               }}
               disabled={loading}

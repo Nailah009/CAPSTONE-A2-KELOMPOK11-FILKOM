@@ -171,6 +171,14 @@ async function getReports(date = null) {
   }))
 }
 
+function formatDateDDMMYYYY(date = new Date()) {
+  const d = new Date(date)
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const year = d.getFullYear()
+  return `${day}${month}${year}`
+}
+
 async function insertReport({
   area,
   cameraId,
@@ -179,14 +187,38 @@ async function insertReport({
   imagePath,
   timestamp
 }) {
+  const effectiveTimestamp = timestamp || formatMysqlDate()
+  const effectiveCameraId = cameraId || 'CAM-LAPTOP'
+  const dateStr = formatDateDDMMYYYY(effectiveTimestamp)
+  let reportId = `RPT-${effectiveCameraId}-${dateStr}`
+
+  // Check if ID already exists and add counter if needed
+  let counter = 1
+  let uniqueId = reportId
+  let idExists = true
+
+  while (idExists) {
+    try {
+      const [existing] = await db.query('SELECT id FROM reports WHERE id = ?', [uniqueId])
+      if (existing && existing.length > 0) {
+        counter++
+        uniqueId = `${reportId}-${String(counter).padStart(2, '0')}`
+      } else {
+        idExists = false
+      }
+    } catch (err) {
+      idExists = false
+    }
+  }
+
   const report = {
-    id: `RPT-${Date.now()}`,
+    id: uniqueId,
     area: area || 'Unknown Area',
-    cameraId: cameraId || 'CAM-LAPTOP',
+    cameraId: effectiveCameraId,
     type: type || 'Unknown Violation',
     missingItems: missingItems || '-',
     imagePath: imagePath || '',
-    timestamp: timestamp || formatMysqlDate()
+    timestamp: effectiveTimestamp
   }
 
   await ensureCameraExists(report.cameraId, report.area)

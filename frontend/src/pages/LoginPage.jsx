@@ -173,7 +173,20 @@ export default function LoginPage() {
                   </div>
                 </label>
 
-                {error && <div className="login-error">{error}</div>}
+                {error && (
+                  <div 
+                    className={error.startsWith('✓') ? 'login-success' : 'login-error'}
+                    style={{
+                      backgroundColor: error.startsWith('✓') ? '#d1fae5 !important' : '#fee2e2 !important',
+                      color: error.startsWith('✓') ? '#047857 !important' : '#b91c1c !important',
+                      borderRadius: '8px',
+                      padding: '12px',
+                      border: error.startsWith('✓') ? '1px solid #6ee7b7' : '1px solid #fca5a5'
+                    }}
+                  >
+                    {error}
+                  </div>
+                )}
 
                 <button type="submit" className="login-main-btn" disabled={loading}>
                   <ShieldCheck size={24} />
@@ -208,7 +221,20 @@ export default function LoginPage() {
                 </div>
               </label>
 
-                {error && <div className="login-error">{error}</div>}
+                {error && (
+                  <div 
+                    className={error.startsWith('✓') ? 'login-success' : 'login-error'}
+                    style={{
+                      backgroundColor: error.startsWith('✓') ? '#d1fae5 !important' : '#fee2e2 !important',
+                      color: error.startsWith('✓') ? '#047857 !important' : '#b91c1c !important',
+                      borderRadius: '8px',
+                      padding: '12px',
+                      border: error.startsWith('✓') ? '1px solid #6ee7b7' : '1px solid #fca5a5'
+                    }}
+                  >
+                    {error}
+                  </div>
+                )}
 
                 <button type="submit" className="login-main-btn" disabled={loading}>
                   <LogIn size={24} />
