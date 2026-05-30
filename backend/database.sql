@@ -27,8 +27,8 @@ CREATE TABLE IF NOT EXISTS `users` (
 -- Dumping data for table `users`
 INSERT INTO `users` (`id`, `name`, `username`, `password`, `role`, `status`, `created_at`) VALUES
 (1, 'Wahyu Hidayat', 'wahyu', 'wahyu123', 'supervisor', 'active', '2026-05-23 06:11:12'),
-(2, 'General Manager', 'manager', 'manager123', 'general_manager', 'active', '2026-05-23 06:11:12'),
-(3, 'Ade Setiawan', 'Admin', 'admin123', 'admin', 'active', '2026-05-23 10:23:47');
+(2, 'General Manager', 'manager', 'manager123', 'general_manager', 'active', '2026-05-23 06:11:12');
+
 
 -- --------------------------------------------------------
 -- 2. Table structure for table `cameras`
@@ -125,24 +125,5 @@ CREATE TABLE IF NOT EXISTS `reports` (
   CONSTRAINT `reports_ibfk_1` FOREIGN KEY (`camera_id`) REFERENCES `cameras` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT `reports_ibfk_2` FOREIGN KEY (`validated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- Dumping data for table `reports`
-INSERT INTO `reports` (`id`, `area`, `camera_id`, `type`, `missing_items`, `image_path`, `timestamp`, `validation_status`, `validated_at`, `validated_by`, `violator_name`, `notes`, `created_at`) VALUES
-('RPT-1779702463245', 'Webcam Test Area', 'CAM-LAPTOP', 'missing all ppe', 'helmet, vest, shoes', 'http://localhost:5000/uploads/violations/VIO-20260525164743.jpg', '2026-05-25 16:47:43', 'valid', '2026-05-25 17:06:03', 1, NULL, NULL, '2026-05-25 09:47:43'),
-('RPT-1779702541284', 'Webcam Test Area', 'CAM-LAPTOP', 'missing all ppe', 'helmet, vest, shoes', 'http://localhost:5000/uploads/violations/VIO-20260525164901.jpg', '2026-05-25 16:49:01', 'valid', '2026-05-25 17:05:52', 1, NULL, NULL, '2026-05-25 09:49:01'),
-('RPT-1779706184689', 'Webcam Test Area', 'CAM-LAPTOP', 'missing all ppe', 'helmet, vest, gloves, shoes', 'http://localhost:5000/uploads/violations/VIO-20260525174944.jpg', '2026-05-25 17:49:44', 'valid', '2026-05-25 17:51:15', 1, NULL, NULL, '2026-05-25 10:49:44'),
-('RPT-1779706616078', 'Webcam Test Area', 'CAM-LAPTOP', 'no vest, no gloves, no shoes', 'vest, gloves, shoes', 'http://localhost:5000/uploads/violations/VIO-20260525175656.jpg', '2026-05-25 17:56:56', 'valid', '2026-05-25 17:59:25', 1, NULL, NULL, '2026-05-25 10:56:56'),
-('RPT-1779709577221', 'Webcam Test Area', 'CAM-LAPTOP', 'missing all ppe', 'helmet, vest, gloves, shoes', 'http://localhost:5000/uploads/violations/VIO-20260525184617.jpg', '2026-05-25 18:46:17', 'valid', '2026-05-25 18:48:51', 1, NULL, NULL, '2026-05-25 11:46:17'),
-('RPT-1779709592959', 'Webcam Test Area', 'CAM-LAPTOP', 'no vest, no gloves, no shoes', 'vest, gloves, shoes', 'http://localhost:5000/uploads/violations/VIO-20260525184632.jpg', '2026-05-25 18:46:32', 'valid', '2026-05-25 18:48:48', 1, NULL, NULL, '2026-05-25 11:46:32'),
-('RPT-1779711089310', 'Webcam Test Area', 'CAM-LAPTOP', 'missing all ppe', 'helmet, vest, gloves, shoes', 'http://localhost:5000/uploads/violations/VIO-20260525191129.jpg', '2026-05-25 19:11:29', 'valid', '2026-05-25 19:13:14', 1, NULL, NULL, '2026-05-25 12:11:29'),
-('RPT-1779711099951', 'Webcam Test Area', 'CAM-LAPTOP', 'no vest, no gloves, no shoes', 'vest, gloves, shoes', 'http://localhost:5000/uploads/violations/VIO-20260525191139.jpg', '2026-05-25 19:11:39', 'valid', '2026-05-25 19:19:58', 1, NULL, NULL, '2026-05-25 12:11:39'),
-('RPT-1779713241028', 'Webcam Test Area', 'CAM-LAPTOP', 'no vest, no gloves, no shoes', 'vest, gloves, shoes', 'http://localhost:5000/uploads/violations/VIO-20260525194721.jpg', '2026-05-25 19:47:21', 'invalid', '2026-05-25 20:11:58', 1, 'Heru / Mandor', 'kelepasan', '2026-05-25 12:47:21'),
-('RPT-1779714296645', 'Webcam Test Area', 'CAM-LAPTOP', 'no vest, no gloves, no shoes', 'vest, gloves, shoes', 'http://localhost:5000/uploads/violations/VIO-20260525200456.jpg', '2026-05-25 20:04:56', 'valid', '2026-05-25 20:10:55', 1, 'Andre / Pekerja Kontruksi', NULL, '2026-05-25 13:04:56'),
-('RPT-1779714529483', 'Webcam Test Area', 'CAM-LAPTOP', 'no vest, no gloves, no shoes', 'vest, gloves, shoes', 'http://localhost:5000/uploads/violations/VIO-20260525200849.jpg', '2026-05-25 20:08:49', 'valid', '2026-05-25 20:10:27', 1, NULL, NULL, '2026-05-25 13:08:49'),
-('RPT-1779718755498', 'Webcam Test Area', 'CAM-LAPTOP', 'missing all ppe', 'helmet, vest, gloves, shoes', 'http://localhost:5000/uploads/violations/VIO-20260525211915.jpg', '2026-05-25 21:19:15', 'valid', '2026-05-26 13:40:42', 1, NULL, NULL, '2026-05-25 14:19:15'),
-('RPT-1779777405466', 'Webcam Test Area', 'CAM-LAPTOP', 'missing all ppe', 'helmet, vest, gloves, shoes', 'http://localhost:5000/uploads/violations/VIO-20260526133645.jpg', '2026-05-26 13:36:45', 'valid', '2026-05-26 13:40:46', 1, NULL, NULL, '2026-05-26 06:36:45'),
-('RPT-1779777466983', 'Webcam Test Area', 'CAM-LAPTOP', 'no vest, no gloves, no shoes', 'vest, gloves, shoes', 'http://localhost:5000/uploads/violations/VIO-20260526133746.jpg', '2026-05-26 13:37:46', 'valid', '2026-05-26 13:40:49', 1, NULL, NULL, '2026-05-26 06:37:46'),
-('RPT-1779778204165', 'Webcam Test Area', 'CAM-LAPTOP', 'missing all ppe', 'helmet, vest, gloves, shoes', 'http://localhost:5000/uploads/violations/VIO-20260526135004.jpg', '2026-05-26 13:50:04', 'invalid', '2026-05-26 14:04:37', 1, NULL, 'anomali', '2026-05-26 06:50:04'),
-('RPT-1779779878580', 'Webcam Test Area', 'CAM-LAPTOP', 'no vest, no gloves', 'vest, gloves', 'http://localhost:5000/uploads/violations/VIO-20260526141758.jpg', '2026-05-26 14:17:58', 'invalid', '2026-05-26 16:30:35', 1, NULL, 'salah baca', '2026-05-26 07:17:58');
 
 COMMIT;
