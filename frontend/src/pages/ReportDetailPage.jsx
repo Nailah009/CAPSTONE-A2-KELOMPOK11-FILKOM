@@ -1,17 +1,23 @@
 ﻿import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { AlertCircle, CheckCircle, XCircle, User, FileText } from 'lucide-react'
+import { AlertCircle, CheckCircle, XCircle, User, FileText, Info } from 'lucide-react'
 import api from '../services/api'
 import { getCurrentUser } from '../utils/auth'
 
 export default function ReportDetailPage() {
   const { reportId } = useParams()
   const [report, setReport] = useState(null)
-  const [isValidating, setIsValidating] = useState(false)
-  const [validationMessage, setValidationMessage] = useState('')
   
+  // State untuk Data Input
   const [inputViolatorName, setInputViolatorName] = useState('')
   const [inputNotes, setInputNotes] = useState('')
+  
+  // State untuk Kontrol UI (Modal & Toast)
+  const [showValidationModal, setShowValidationModal] = useState(false)
+  const [pendingValidationStatus, setPendingValidationStatus] = useState(null)
+  const [modalError, setModalError] = useState('')
+  const [isValidating, setIsValidating] = useState(false)
+  const [validationMessage, setValidationMessage] = useState('')
   
   const user = getCurrentUser()
 
@@ -25,41 +31,64 @@ export default function ReportDetailPage() {
       .catch((error) => console.error('Gagal mengambil detail report:', error))
   }, [reportId])
 
-  const handleValidate = async (status) => {
+  // Fungsi Pemicu Pop-up Modal
+  const openValidationModal = (status) => {
+    setPendingValidationStatus(status)
+    setModalError('')
+    setShowValidationModal(true)
+  }
+
+  const closeValidationModal = () => {
+    setShowValidationModal(false)
+    setPendingValidationStatus(null)
+    setModalError('')
+  }
+
+  // Fungsi Eksekusi API saat tombol Simpan di Modal ditekan
+  const submitValidation = async () => {
     if (!user?.id) {
       alert('User tidak ditemukan')
       return
     }
 
-    if (status === 'invalid' && !inputNotes.trim()) {
-      setValidationMessage('✗ Wajib mengisi catatan jika laporan dinyatakan Tidak Valid.')
-      setTimeout(() => setValidationMessage(''), 10000)
+    // Validasi wajib isi khusus untuk status Invalid
+    if (pendingValidationStatus === 'invalid' && !inputNotes.trim()) {
+      setModalError('Keterangan / Catatan wajib diisi jika menolak laporan (Invalid).')
       return
     }
 
     setIsValidating(true)
+    setModalError('')
+    
     try {
       await api.put(`/reports/${reportId}/validate`, {
-        validationStatus: status,
+        validationStatus: pendingValidationStatus,
         validatedBy: user.id,
         violatorName: inputViolatorName,
         notes: inputNotes
       })
       
-      setValidationMessage(`✓ Report berhasil divalidasi sebagai ${status}`)
+      // Update UI dan Tampilkan Toast Sukses
+      setValidationMessage(`✓ Laporan berhasil divalidasi sebagai ${pendingValidationStatus.toUpperCase()}`)
       setReport({ 
         ...report, 
-        validationStatus: status,
+        validationStatus: pendingValidationStatus,
         violatorName: inputViolatorName,
         notes: inputNotes
       })
       
+      closeValidationModal()
+      
+      // Toast menghilang otomatis dalam 5 detik
       setTimeout(() => {
         setValidationMessage('')
-      }, 3000)
+      }, 5000)
+      
     } catch (error) {
       console.error('Gagal memvalidasi report:', error)
-      setValidationMessage('✗ Gagal memvalidasi report')
+      setValidationMessage('✗ Terjadi kesalahan. Gagal memvalidasi laporan.')
+      closeValidationModal()
+      
       setTimeout(() => {
         setValidationMessage('')
       }, 3000)
@@ -76,7 +105,7 @@ export default function ReportDetailPage() {
   const isReportPending = report.validationStatus === 'pending'
 
   return (
-    <div className="report-detail-page">
+    <div className="report-detail-page" style={{ position: 'relative' }}>
       <Link to="/reports" className="report-back-link">
         ← Kembali
       </Link>
@@ -86,69 +115,47 @@ export default function ReportDetailPage() {
         <p>Informasi detail pelanggaran dari sistem monitoring K3.</p>
       </div>
 
-      {/* Kontainer utama diset memiliki properti alignItems: 'start' agar kolom tidak saling memanjangkan diri */}
       <div className="report-detail-layout" style={{ alignItems: 'flex-start' }}>
         
-        {/* KOLOM KIRI: INTERNAL SCROLL */}
+        {/* KOLOM KIRI: INFO & TOMBOL AKSI */}
         <section 
           className="report-info-card" 
           style={{ 
-            maxHeight: 'calc(100vh - 140px)', // Membatasi tinggi maksimum layar
-            overflowY: 'auto',                // Mengaktifkan scroll internal
-            paddingRight: '1rem',             // Memberi ruang agar scrollbar tidak menabrak teks
+            maxHeight: 'calc(100vh - 140px)',
+            overflowY: 'auto',
+            paddingRight: '1rem',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h2>Informasi Pelanggaran</h2>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               {report.validationStatus === 'valid' && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#10b981', fontSize: '0.875rem' }}>
-                  <CheckCircle size={16} />
-                  <span>Valid</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#10b981', fontSize: '0.875rem', fontWeight: 'bold' }}>
+                  <CheckCircle size={16} /><span>VALID</span>
                 </div>
               )}
               {report.validationStatus === 'invalid' && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#ef4444', fontSize: '0.875rem' }}>
-                  <XCircle size={16} />
-                  <span>Invalid</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#ef4444', fontSize: '0.875rem', fontWeight: 'bold' }}>
+                  <XCircle size={16} /><span>INVALID</span>
                 </div>
               )}
               {report.validationStatus === 'pending' && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#f59e0b', fontSize: '0.875rem' }}>
-                  <AlertCircle size={16} />
-                  <span>Pending</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: '#f59e0b', fontSize: '0.875rem', fontWeight: 'bold' }}>
+                  <AlertCircle size={16} /><span>PENDING</span>
                 </div>
               )}
             </div>
           </div>
 
           <div className="report-info-list">
-            <div className="report-info-item">
-              <span>ID</span>
-              <strong>{report.id}</strong>
-            </div>
-
-            <div className="report-info-item">
-              <span>Area</span>
-              <strong>{report.area}</strong>
-            </div>
-
-            <div className="report-info-item">
-              <span>Camera</span>
-              <strong>{report.cameraId}</strong>
-            </div>
-
-            <div className="report-info-item">
-              <span>Type</span>
-              <strong>{report.type}</strong>
-            </div>
-
-            <div className="report-info-item">
-              <span>Timestamp</span>
-              <strong>{report.timestamp}</strong>
-            </div>
+            <div className="report-info-item"><span>ID</span><strong>{report.id}</strong></div>
+            <div className="report-info-item"><span>Area</span><strong>{report.area}</strong></div>
+            <div className="report-info-item"><span>Camera</span><strong>{report.cameraId}</strong></div>
+            <div className="report-info-item"><span>Type</span><strong>{report.type}</strong></div>
+            <div className="report-info-item"><span>Timestamp</span><strong>{report.timestamp}</strong></div>
           </div>
 
+          {/* MENAMPILKAN CATATAN JIKA SUDAH DIVALIDASI */}
           {!isReportPending && (report.violatorName || report.notes) && (
             <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid #e5e7eb' }}>
               <h3 style={{ marginBottom: '1rem', fontSize: '0.95rem', fontWeight: '600' }}>Catatan Pengawas</h3>
@@ -175,54 +182,31 @@ export default function ReportDetailPage() {
             </div>
           )}
 
+          {/* TOMBOL AKSI UNTUK SUPERVISOR (JIKA PENDING) */}
           {isReportPending && user?.role === 'supervisor' && (
             <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid #e5e7eb' }}>
-              <h3 style={{ marginBottom: '1rem', fontSize: '0.95rem', fontWeight: '600' }}>Validasi Pelanggaran</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                <Info size={18} color="#64748b"/>
+                <span style={{ fontSize: '0.875rem', color: '#64748b' }}>Mohon verifikasi temuan AI pada foto di samping.</span>
+              </div>
               
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem', color: '#4b5563' }}>
-                  Nama Pelanggar <span style={{ color: '#9ca3af' }}>(Opsional)</span>
-                </label>
-                <input 
-                  type="text" 
-                  value={inputViolatorName}
-                  onChange={(e) => setInputViolatorName(e.target.value)}
-                  placeholder="Contoh: Budi Santoso / Pekerja Subkon" 
-                  style={{ width: '100%', padding: '0.6rem', borderRadius: '0.375rem', border: '1px solid #d1d5db', fontSize: '0.875rem', resize: 'none' }}
-                />
-              </div>
-
-              <div style={{ marginBottom: '1.5rem' }}>
-                <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem', color: '#4b5563' }}>
-                  Catatan / Keterangan <span style={{ color: '#9ca3af' }}>(Wajib jika Invalid)</span>
-                </label>
-                <textarea 
-                  value={inputNotes}
-                  onChange={(e) => setInputNotes(e.target.value)}
-                  placeholder="Contoh: Sudah diberikan teguran lisan. / Salah deteksi AI, benda tersebut adalah tumpukan barang." 
-                  style={{ width: '100%', padding: '0.6rem', borderRadius: '0.375rem', border: '1px solid #d1d5db', minHeight: '80px', fontSize: '0.875rem', fontFamily: 'inherit', resize: 'none' }}
-                />
-              </div>
-
               <div style={{ display: 'flex', gap: '0.75rem' }}>
                 <button
-                  onClick={() => handleValidate('valid')}
-                  disabled={isValidating}
+                  onClick={() => openValidationModal('valid')}
                   style={{
                     flex: 1, padding: '0.75rem 1rem', backgroundColor: '#10b981', color: 'white',
-                    border: 'none', borderRadius: '0.375rem', cursor: isValidating ? 'not-allowed' : 'pointer',
-                    fontSize: '0.875rem', fontWeight: '500', opacity: isValidating ? 0.7 : 1
+                    border: 'none', borderRadius: '0.375rem', cursor: 'pointer',
+                    fontSize: '0.875rem', fontWeight: 'bold'
                   }}
                 >
                   ✓ Valid
                 </button>
                 <button
-                  onClick={() => handleValidate('invalid')}
-                  disabled={isValidating}
+                  onClick={() => openValidationModal('invalid')}
                   style={{
                     flex: 1, padding: '0.75rem 1rem', backgroundColor: '#ef4444', color: 'white',
-                    border: 'none', borderRadius: '0.375rem', cursor: isValidating ? 'not-allowed' : 'pointer',
-                    fontSize: '0.875rem', fontWeight: '500', opacity: isValidating ? 0.7 : 1
+                    border: 'none', borderRadius: '0.375rem', cursor: 'pointer',
+                    fontSize: '0.875rem', fontWeight: 'bold'
                   }}
                 >
                   ✗ Invalid
@@ -230,24 +214,13 @@ export default function ReportDetailPage() {
               </div>
             </div>
           )}
-
-          {validationMessage && (
-            <div style={{
-              marginTop: '1rem', padding: '0.75rem 1rem',
-              backgroundColor: validationMessage.startsWith('✓') ? '#d1fae5' : '#fee2e2',
-              color: validationMessage.startsWith('✓') ? '#047857' : '#b91c1c',
-              borderRadius: '0.375rem', fontSize: '0.875rem'
-            }}>
-              {validationMessage}
-            </div>
-          )}
         </section>
 
-        {/* KOLOM KANAN: STICKY POSITIONING */}
+        {/* KOLOM KANAN: BUKTI FOTO */}
         <section 
           className="report-evidence-card" 
           style={{ 
-            position: 'sticky', // Kolom kanan akan menempel di atas
+            position: 'sticky',
             top: '2rem',
             height: 'fit-content' 
           }}
@@ -257,11 +230,9 @@ export default function ReportDetailPage() {
             <p>Bukti tangkapan pelanggaran dari sistem deteksi.</p>
           </div>
 
-          {/* KUNCI PROPORSI GAMBAR: HEIGHT FIXED & OBJECT FIT */}
           <div 
             className="evidence-frame" 
             style={{ 
-              
               aspectRatio: '4/3', 
               width: '100%', 
               backgroundColor: '#1e293b', 
@@ -276,23 +247,123 @@ export default function ReportDetailPage() {
               <img
                 src={evidenceImage}
                 alt="Bukti Pelanggaran"
-                style={{ 
-                  width: '100%', 
-                  height: '100%', 
-                  objectFit: 'contain' // Menjaga rasio foto asli tanpa melar
-                }}
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none'
-                }}
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                onError={(e) => { e.currentTarget.style.display = 'none' }}
               />
             ) : (
-              <div className="report-evidence-placeholder">
-                Evidence belum tersedia
-              </div>
+              <div className="report-evidence-placeholder">Evidence belum tersedia</div>
             )}
           </div>
         </section>
       </div>
+
+      {/* CUSTOM MODAL (POP-UP) FORMULIR VALIDASI */}
+      {showValidationModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)',
+          display: 'flex', justifyContent: 'center', alignItems: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white', width: '90%', maxWidth: '450px',
+            borderRadius: '0.75rem', padding: '1.5rem',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
+          }}>
+            <h3 style={{ marginTop: 0, marginBottom: '0.5rem', fontSize: '1.25rem', color: '#0f172a' }}>
+              Konfirmasi Laporan {pendingValidationStatus === 'valid' ? 'Valid' : 'Invalid'}
+            </h3>
+            <p style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '1.5rem' }}>
+              Silakan lengkapi informasi berikut sebelum menyimpan.
+            </p>
+
+            {modalError && (
+              <div style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '0.75rem', borderRadius: '0.375rem', fontSize: '0.875rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <AlertCircle size={16} /> {modalError}
+              </div>
+            )}
+
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem', color: '#334155' }}>
+                Nama Pelanggar <span style={{ color: '#94a3b8', fontWeight: 'normal' }}>(Opsional)</span>
+              </label>
+              <input 
+                type="text" 
+                value={inputViolatorName}
+                onChange={(e) => setInputViolatorName(e.target.value)}
+                placeholder="Contoh: Budi Santoso / Pekerja Subkon" 
+                style={{ width: '100%', padding: '0.6rem', borderRadius: '0.375rem', border: '1px solid #cbd5e1', fontSize: '0.875rem', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', marginBottom: '0.5rem', color: '#334155' }}>
+                Catatan / Keterangan {pendingValidationStatus === 'invalid' && <span style={{ color: '#ef4444' }}>*</span>}
+              </label>
+              <textarea 
+                value={inputNotes}
+                onChange={(e) => setInputNotes(e.target.value)}
+                placeholder="Contoh: Sudah diberikan teguran. / Benda tersebut adalah barang." 
+                style={{ width: '100%', padding: '0.6rem', borderRadius: '0.375rem', border: `1px solid ${pendingValidationStatus === 'invalid' && !inputNotes ? '#ef4444' : '#cbd5e1'}`, minHeight: '80px', fontSize: '0.875rem', fontFamily: 'inherit', resize: 'none', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button 
+                onClick={closeValidationModal}
+                disabled={isValidating}
+                style={{ padding: '0.6rem 1rem', backgroundColor: 'transparent', color: '#64748b', border: '1px solid #cbd5e1', borderRadius: '0.375rem', cursor: 'pointer', fontSize: '0.875rem', fontWeight: '500' }}
+              >
+                Batal
+              </button>
+              <button 
+                onClick={submitValidation}
+                disabled={isValidating}
+                style={{ 
+                  padding: '0.6rem 1.5rem', 
+                  backgroundColor: pendingValidationStatus === 'valid' ? '#10b981' : '#ef4444', 
+                  color: 'white', border: 'none', borderRadius: '0.375rem', 
+                  cursor: isValidating ? 'not-allowed' : 'pointer', fontSize: '0.875rem', fontWeight: '500',
+                  opacity: isValidating ? 0.7 : 1
+                }}
+              >
+                {isValidating ? 'Menyimpan...' : 'Simpan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOM FLOATING TOAST NOTIFICATION */}
+      {validationMessage && (
+        <div style={{
+          position: 'fixed',
+          bottom: '2rem',
+          right: '2rem',
+          padding: '1rem 1.5rem',
+          backgroundColor: validationMessage.startsWith('✓') ? '#10b981' : '#ef4444',
+          color: 'white',
+          borderRadius: '0.5rem',
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+          fontSize: '0.9rem',
+          fontWeight: '500',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          animation: 'slideUp 0.3s ease-out forwards'
+        }}>
+          {validationMessage.startsWith('✓') ? <CheckCircle size={20} /> : <XCircle size={20} />}
+          <span>{validationMessage.substring(2)}</span>
+          
+          <style>{`
+            @keyframes slideUp {
+              from { transform: translateY(100%); opacity: 0; }
+              to { transform: translateY(0); opacity: 1; }
+            }
+          `}</style>
+        </div>
+      )}
     </div>
   )
 }

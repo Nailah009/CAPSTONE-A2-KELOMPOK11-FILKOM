@@ -4,6 +4,7 @@ import dotenv from 'dotenv'
 import multer from 'multer'
 import fs from 'fs'
 import path from 'path'
+import cron from 'node-cron'
 import db from './db.js'
 
 dotenv.config()
@@ -1235,6 +1236,116 @@ app.get('/api/admin/ai-config', async (req, res) => {
     console.error('Gagal mengambil AI config:', error)
     res.status(500).json({ message: 'Gagal mengambil AI config' })
   }
+})
+
+// ==========================================
+// TELEGRAM BOT INTEGRATION - DAILY SUMMARY
+// ==========================================
+async function sendTelegramDailySummary() {
+  const token = process.env.TELEGRAM_BOT_TOKEN
+  const chatId = process.env.TELEGRAM_CHAT_ID
+
+  if (!token || !chatId) {
+    console.warn('⚠️ Telegram Token atau Chat ID belum disetel di .env')
+    return
+  }
+
+  try {
+    // 1. Ambil data hari ini
+    const today = new Date().toISOString().slice(0, 10)
+    const [todayReports] = await db.query(
+      'SELECT type, validation_status, area FROM reports WHERE DATE(timestamp) = ?', 
+      [today]
+    )
+    
+    // 2. Ambil hutang validasi (pending dari hari-hari sebelumnya)
+    const [pendingPast] = await db.query(
+      "SELECT COUNT(*) as count FROM reports WHERE COALESCE(validation_status, 'pending') = 'pending' AND DATE(timestamp) < ?", 
+      [today]
+    )
+
+    // 3. Kalkulasi Angka Utama
+    const totalToday = todayReports.length
+    const validCount = todayReports.filter(r => r.validation_status === 'valid').length
+    const invalidCount = todayReports.filter(r => r.validation_status === 'invalid').length
+    const pendingToday = todayReports.filter(r => r.validation_status === 'pending' || !r.validation_status).length
+    const hutangValidasi = pendingPast[0].count
+
+    // 4. Kalkulasi Pelanggaran & Area Terbanyak
+    const typeCounts = {}
+    const areaCounts = {}
+
+    todayReports.forEach(r => {
+      typeCounts[r.type] = (typeCounts[r.type] || 0) + 1
+      const areaName = r.area || 'Unknown Area'
+      areaCounts[areaName] = (areaCounts[areaName] || 0) + 1
+    })
+
+    const sortedTypes = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])
+    const mostFrequentType = sortedTypes.length > 0 ? `${sortedTypes[0][0]} (${sortedTypes[0][1]} Kasus)` : '-'
+
+    const sortedAreas = Object.entries(areaCounts).sort((a, b) => b[1] - a[1])
+    const mostFrequentArea = sortedAreas.length > 0 ? `${sortedAreas[0][0]} (${sortedAreas[0][1]} Kasus)` : '-'
+
+    // 5. Susun Pesan MENGGUNAKAN HTML
+    const message = `
+📊 <b>LAPORAN HARIAN K3 VISION</b> 📊
+🗓️ Tanggal: ${new Date().toLocaleDateString('id-ID')}
+
+Selamat malam, berikut adalah ringkasan pemantauan kepatuhan APD hari ini:
+
+📈 <b>RINGKASAN PELANGGARAN (Total: ${totalToday} Deteksi)</b>
+• 🟢 <b>Valid</b> (Terkonfirmasi Pelanggaran): ${validCount}
+• 🔴 <b>Invalid</b> (Salah Deteksi AI): ${invalidCount}
+• ⚠️ <b>Pending</b> (Belum Divalidasi): ${pendingToday}
+
+📌 <b>REKAP KEJADIAN</b>
+• 🦺 <b>Pelanggaran Terbanyak:</b> ${mostFrequentType}
+• 📍 <b>Lokasi Paling Rawan:</b> ${mostFrequentArea}
+
+⏳ <b>CATATAN:</b> Terdapat total <b>${hutangValidasi}</b> laporan dari hari-hari sebelumnya yang masih berstatus <i>Pending</i>.
+
+🔗 <b>Akses Dashboard untuk Validasi & Ekspor Laporan:</b>
+http://localhost:5173/reports
+`
+
+    // 6. Kirim via Telegram API menggunakan parse_mode HTML
+    const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: message,
+        parse_mode: 'HTML'
+      })
+    })
+
+    if (!response.ok) {
+      const err = await response.json()
+      console.error('Gagal mengirim Telegram:', err)
+    } else {
+      console.log('Laporan telah dikirim ke Telegram')
+    }
+
+  } catch (error) {
+    console.error('❌ Terjadi kesalahan saat mengeksekusi Telegram Bot:', error)
+  }
+}
+
+// ==========================================
+// PENJADWALAN DAN ENDPOINT TESTING
+// ==========================================
+
+// Jadwalkan Cron Job (Berjalan setiap hari pada jam 19:00 server)
+cron.schedule('0 19 * * *', () => {
+  console.log('Menjalankan Cron Job: Mengirim Rekap Telegram...')
+  sendTelegramDailySummary()
+})
+
+// Endpoint untuk trigger manual dari browser (WAJIB ADA AGAR TIDAK ERROR "CANNOT GET")
+app.get('/api/test-telegram', async (req, res) => {
+  await sendTelegramDailySummary()
+  res.json({ message: 'Perintah pengiriman Telegram telah dipicu, silakan cek HP Anda.' })
 })
 
 app.listen(PORT, () => {
