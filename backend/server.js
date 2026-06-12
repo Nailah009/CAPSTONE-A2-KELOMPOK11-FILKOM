@@ -6,6 +6,10 @@ import fs from 'fs'
 import path from 'path'
 import cron from 'node-cron'
 import db from './db.js'
+import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
+import axios from 'axios'
+import FormData from 'form-data'
 
 dotenv.config()
 
@@ -76,7 +80,7 @@ function normalizeViolationType(type = '') {
   return 'Others'
 }
 
-function createViolationTypeFromBooleans({ missingHelmet, missingVest}) {
+function createViolationTypeFromBooleans({ missingHelmet, missingVest }) {
   if (!missingHelmet && !missingVest) return 'No Violation'
   if (missingHelmet && missingVest) return 'Missing All PPE'
 
@@ -367,7 +371,7 @@ app.get('/api/cameras/:id', async (req, res) => {
 app.get('/api/reports', async (req, res) => {
   try {
     const { area, type, validationStatus, startDate, endDate } = req.query
-    
+
     let query = `
       SELECT
         id,
@@ -383,24 +387,24 @@ app.get('/api/reports', async (req, res) => {
       FROM reports
       WHERE 1=1
     `
-    
+
     const params = []
-    
+
     if (area && area !== 'All') {
       query += ` AND area = ?`
       params.push(area)
     }
-    
+
     if (type && type !== 'All') {
       query += ` AND type = ?`
       params.push(type)
     }
-    
+
     if (validationStatus && validationStatus !== 'All') {
       query += ` AND validation_status = ?`
       params.push(validationStatus)
     }
-    
+
     if (startDate) {
       query += ` AND DATE(timestamp) >= ?`
       params.push(startDate)
@@ -409,11 +413,11 @@ app.get('/api/reports', async (req, res) => {
       query += ` AND DATE(timestamp) <= ?`
       params.push(endDate)
     }
-    
+
     query += ` ORDER BY timestamp DESC`
-    
+
     const [rows] = await db.query(query, params)
-    
+
     const reports = rows.map((row) => ({
       id: row.id,
       area: row.area,
@@ -440,7 +444,7 @@ app.get('/api/reports', async (req, res) => {
                   ? '#ec4899'
                   : '#64748b'
     }))
-    
+
     res.json(reports)
   } catch (error) {
     console.error('Gagal mengambil reports:', error)
@@ -537,7 +541,7 @@ app.post('/api/violations/ingest', upload.single('image'), async (req, res) => {
 
     const type =
       req.body.type ||
-      createViolationTypeFromBooleans({ missingHelmet, missingVest})
+      createViolationTypeFromBooleans({ missingHelmet, missingVest })
 
     const image = req.file
       ? `http://localhost:${PORT}/uploads/violations/${req.file.filename}`
@@ -987,7 +991,7 @@ app.post('/api/admin/cameras', async (req, res) => {
     const cameraId = `CAM-${Date.now()}`
     const hasRtspUrl = rtsp_url && rtsp_url.trim() !== ''
     const status = hasRtspUrl ? 'Active' : 'Inactive'
-    
+
     await db.query(
       `INSERT INTO cameras (id, name, location, rtsp_url, status, created_at)
        VALUES (?, ?, ?, ?, ?, NOW())`,
@@ -1015,8 +1019,8 @@ app.put('/api/admin/cameras/:id', async (req, res) => {
     if (rtsp_url && rtsp_url.trim() !== '') {
       const trimmedUrl = rtsp_url.trim()
       // Hanya allow: RTSP URL, laptop address '0', atau URL lainnya
-      if (trimmedUrl !== '0' && !trimmedUrl.toLowerCase().startsWith('rtsp://') && 
-          !trimmedUrl.toLowerCase().startsWith('http')) {
+      if (trimmedUrl !== '0' && !trimmedUrl.toLowerCase().startsWith('rtsp://') &&
+        !trimmedUrl.toLowerCase().startsWith('http')) {
         return res.status(400).json({ message: 'RTSP URL harus valid (rtsp:// atau http://) atau "0" untuk laptop' })
       }
     }
@@ -1239,92 +1243,164 @@ app.get('/api/admin/ai-config', async (req, res) => {
 })
 
 // ==========================================
-// TELEGRAM BOT INTEGRATION - DAILY SUMMARY
+// TELEGRAM BOT INTEGRATION - DAILY SUMMARY & PDF
 // ==========================================
+
+// Fungsi Internal untuk menggambar PDF
+function generateDailyPDFBuffer(reports, dateStr, summaryStats) {
+  const doc = new jsPDF()
+
+  // Header Dokumen
+  doc.setFontSize(16)
+  doc.setTextColor(40, 40, 40)
+  doc.text('LAPORAN HARIAN KEPATUHAN K3', 14, 20)
+
+  // Sub-Header / Meta Info
+  doc.setFontSize(10)
+  doc.setTextColor(100, 100, 100)
+  doc.text('Sistem Monitoring Vision - PT EPSON INDONESIA', 14, 26)
+  doc.text(`Tanggal Cetak: ${dateStr}`, 14, 32)
+  doc.text(`Statistik: ${summaryStats.total} Total | ${summaryStats.valid} Valid | ${summaryStats.invalid} Invalid | ${summaryStats.pending} Pending`, 14, 38)
+
+  // Persiapan Data Tabel
+  const tableColumn = ["No", "ID Laporan", "Area", "Kamera", "Pelanggaran", "Status", "Nama & Catatan"]
+  const tableRows = reports.map((r, i) => {
+    // Gabungkan Nama dan Catatan agar tabel lebih rapi
+    const notesArr = []
+    if (r.violator_name) notesArr.push(`Nama: ${r.violator_name}`)
+    if (r.notes) notesArr.push(`Ket: ${r.notes}`)
+    const finalNotes = notesArr.length > 0 ? notesArr.join('\n') : '-'
+
+    return [
+      i + 1,
+      r.id || '-',
+      r.area || '-',
+      r.camera_id || '-',
+      r.type || '-',
+      (r.validation_status || 'pending').toUpperCase(),
+      finalNotes
+    ]
+  })
+
+  // PENCEGAHAN ERROR JIKA DATA KOSONG (0 Pelanggaran Hari Ini)
+  const finalBody = tableRows.length > 0 ? tableRows : [['-', '-', '-', '-', 'TIDAK ADA PELANGGARAN HARI INI', '-', '-']]
+
+  // Gambar Tabel Menggunakan Sintaks autoTable ES6
+  autoTable(doc, {
+    head: [tableColumn],
+    body: finalBody,
+    startY: 45,
+    styles: { fontSize: 8, cellPadding: 3 },
+    headStyles: { fillColor: [37, 99, 235] }, // Warna Header Biru Dashboard
+    columnStyles: {
+      0: { cellWidth: 10 },  // No
+      1: { cellWidth: 35 },  // ID
+      6: { cellWidth: 50 }   // Nama & Catatan
+    }
+  })
+
+  // Konversi ke Buffer
+  const arrayBuffer = doc.output('arraybuffer')
+  return Buffer.from(arrayBuffer)
+}
+
+// Send Telegram
 async function sendTelegramDailySummary() {
-  const token = process.env.TELEGRAM_BOT_TOKEN
-  const chatId = process.env.TELEGRAM_CHAT_ID
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
 
   if (!token || !chatId) {
-    console.warn('⚠️ Telegram Token atau Chat ID belum disetel di .env')
-    return
+    console.warn('⚠️ Telegram Token atau Chat ID belum disetel di .env');
+    return;
   }
 
   try {
-    // 1. Ambil data hari ini
-    const today = new Date().toISOString().slice(0, 10)
+    const today = new Date().toISOString().slice(0, 10);
+    const dateStrIndo = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    // 1. Ambil Data Database
     const [todayReports] = await db.query(
-      'SELECT type, validation_status, area FROM reports WHERE DATE(timestamp) = ?', 
+      'SELECT id, camera_id, type, validation_status, area, violator_name, notes FROM reports WHERE DATE(timestamp) = ? ORDER BY timestamp DESC',
       [today]
-    )
-    
-    // 2. Ambil hutang validasi (pending dari hari-hari sebelumnya)
+    );
+
     const [pendingPast] = await db.query(
-      "SELECT COUNT(*) as count FROM reports WHERE COALESCE(validation_status, 'pending') = 'pending' AND DATE(timestamp) < ?", 
+      "SELECT COUNT(*) as count FROM reports WHERE COALESCE(validation_status, 'pending') = 'pending' AND DATE(timestamp) < ?",
       [today]
-    )
+    );
 
-    // 3. Kalkulasi Angka Utama
-    const totalToday = todayReports.length
-    const validCount = todayReports.filter(r => r.validation_status === 'valid').length
-    const invalidCount = todayReports.filter(r => r.validation_status === 'invalid').length
-    const pendingToday = todayReports.filter(r => r.validation_status === 'pending' || !r.validation_status).length
-    const hutangValidasi = pendingPast[0].count
+    // 2. Fungsi Statistik
+    const totalToday = todayReports.length;
+    const validCount = todayReports.filter(r => r.validation_status === 'valid').length;
+    const invalidCount = todayReports.filter(r => r.validation_status === 'invalid').length;
+    const pendingToday = todayReports.filter(r => r.validation_status === 'pending' || !r.validation_status).length;
+    const hutangValidasi = pendingPast[0].count;
 
-    // 4. Kalkulasi Pelanggaran & Area Terbanyak
-    const typeCounts = {}
-    const areaCounts = {}
+    const typeCounts = {};
+    const areaCounts = {};
 
     todayReports.forEach(r => {
-      typeCounts[r.type] = (typeCounts[r.type] || 0) + 1
-      const areaName = r.area || 'Unknown Area'
-      areaCounts[areaName] = (areaCounts[areaName] || 0) + 1
-    })
+      typeCounts[r.type] = (typeCounts[r.type] || 0) + 1;
+      const areaName = r.area || 'Unknown Area';
+      areaCounts[areaName] = (areaCounts[areaName] || 0) + 1;
+    });
 
-    const sortedTypes = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])
-    const mostFrequentType = sortedTypes.length > 0 ? `${sortedTypes[0][0]} (${sortedTypes[0][1]} Kasus)` : '-'
+    const sortedTypes = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]);
+    const mostFrequentType = sortedTypes.length > 0 ? `${sortedTypes[0][0]} (${sortedTypes[0][1]} Kasus)` : '-';
 
-    const sortedAreas = Object.entries(areaCounts).sort((a, b) => b[1] - a[1])
-    const mostFrequentArea = sortedAreas.length > 0 ? `${sortedAreas[0][0]} (${sortedAreas[0][1]} Kasus)` : '-'
+    const sortedAreas = Object.entries(areaCounts).sort((a, b) => b[1] - a[1]);
+    const mostFrequentArea = sortedAreas.length > 0 ? `${sortedAreas[0][0]} (${sortedAreas[0][1]} Kasus)` : '-';
 
-    // 5. Susun Pesan MENGGUNAKAN HTML
-    const message = `
+    // 3. Struktur Teks
+    const textMessage = `
 📊 <b>LAPORAN HARIAN K3 VISION</b> 📊
-🗓️ Tanggal: ${new Date().toLocaleDateString('id-ID')}
+🗓️ Tanggal: ${dateStrIndo}
 
 Selamat malam, berikut adalah ringkasan pemantauan kepatuhan APD hari ini:
 
-📈 <b>RINGKASAN PELANGGARAN (Total: ${totalToday} Deteksi)</b>
+📈 <b>RINGKASAN INSIDEN (Total: ${totalToday} Deteksi)</b>
 • 🟢 <b>Valid</b> (Terkonfirmasi Pelanggaran): ${validCount}
 • 🔴 <b>Invalid</b> (Salah Deteksi AI): ${invalidCount}
 • ⚠️ <b>Pending</b> (Belum Divalidasi): ${pendingToday}
 
-📌 <b>REKAP KEJADIAN</b>
+📌 <b>FOKUS UTAMA HARI INI</b>
 • 🦺 <b>Pelanggaran Terbanyak:</b> ${mostFrequentType}
 • 📍 <b>Lokasi Paling Rawan:</b> ${mostFrequentArea}
 
-⏳ <b>CATATAN:</b> Terdapat total <b>${hutangValidasi}</b> laporan dari hari-hari sebelumnya yang masih berstatus <i>Pending</i>.
+⏳ <b>PENGINGAT:</b> Terdapat total <b>${hutangValidasi}</b> laporan dari hari-hari sebelumnya yang masih berstatus <i>Pending</i>.
 
-🔗 <b>Akses Dashboard untuk Validasi & Ekspor Laporan:</b>
-http://localhost:5173/reports
-`
+📄 <i>Detail rincian kasus beserta catatan Supervisor terlampir pada dokumen PDF di bawah ini.</i>
+`;
 
-    // 6. Kirim via Telegram API menggunakan parse_mode HTML
-    const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    // 4. Ringkasan 
+    try {
+      await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
         chat_id: chatId,
-        text: message,
+        text: textMessage,
         parse_mode: 'HTML'
       })
-    })
+    } catch (err) {
+      console.error('❌ Gagal mengirim teks Telegram:', err.response?.data || err.message)
+      return // Berhenti jika gagal kirim teks
+    }
 
-    if (!response.ok) {
-      const err = await response.json()
-      console.error('Gagal mengirim Telegram:', err)
-    } else {
-      console.log('Laporan telah dikirim ke Telegram')
+    // 5. Buat File PDF
+    const summaryStats = { total: totalToday, valid: validCount, invalid: invalidCount, pending: pendingToday }
+    const pdfBuffer = generateDailyPDFBuffer(todayReports, dateStrIndo, summaryStats)
+
+    // Gunakan FormData dari package NodeJS (Tidak perlu fungsi Blob browser)
+    const formData = new FormData()
+    formData.append('chat_id', chatId)
+    formData.append('document', pdfBuffer, `Laporan_K3_Vision_${today}.pdf`)
+
+    // 6. Kirim Dokumen PDF 
+    try {
+      await axios.post(`https://api.telegram.org/bot${token}/sendDocument`, formData, {
+        headers: formData.getHeaders() // Wajib di NodeJS agar Telegram tahu ini adalah file
+      })
+      console.log('✅ Berhasil mengirim teks rekap & dokumen PDF ke Telegram!')
+    } catch (err) {
+      console.error('❌ Gagal mengirim dokumen PDF Telegram:', err.response?.data || err.message)
     }
 
   } catch (error) {
